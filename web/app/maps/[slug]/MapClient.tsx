@@ -611,6 +611,203 @@ function LineupSearch({
   );
 }
 
+// Which dart an "aim" step belongs to, based on its caption. null if the step
+// isn't an aim step (or the dart can't be determined).
+function dartOfCaption(caption: string): 1 | 2 | null {
+  const c = caption.toLowerCase();
+  if (!c.includes("aim")) return null;
+  if (c.includes("second") || c.includes("2nd")) return 2;
+  if (c.includes("first") || c.includes("1st")) return 1;
+  return null;
+}
+
+// Build per-step dart indicators for double-shock lineups (card + lightbox).
+function buildCardDartOverlays(
+  lineup: Lineup,
+  variant: "badge" | "full" = "badge",
+): {
+  stepOverlays?: (React.ReactNode | null)[];
+  placedBothDarts: boolean;
+  isSova: boolean;
+  isDouble: boolean;
+} {
+  const steps = lineup.steps ?? [];
+  const isSova = lineup.agentSlug === "sova";
+  const isDouble = isSova && !!lineup.doubleShock;
+  if (!isDouble || steps.length === 0) {
+    return { placedBothDarts: false, isSova, isDouble };
+  }
+  let p1 = false;
+  let p2 = false;
+  const stepOverlays = steps.map((s, i) => {
+    const dart = dartOfCaption(s.caption);
+    if (dart === 2) {
+      p2 = true;
+      return (
+        <SovaIndicator
+          key={i}
+          title={variant === "full" ? "Second Dart" : undefined}
+          charge={lineup.charge2}
+          bounces={lineup.bounces2}
+          jump={lineup.jump2}
+          variant={variant}
+        />
+      );
+    }
+    if (dart === 1) {
+      p1 = true;
+      return (
+        <SovaIndicator
+          key={i}
+          title={variant === "full" ? "First Dart" : undefined}
+          charge={lineup.charge}
+          bounces={lineup.bounces}
+          jump={lineup.jump}
+          variant={variant}
+        />
+      );
+    }
+    return null;
+  });
+  const placedBothDarts = p1 && p2;
+  return {
+    stepOverlays: placedBothDarts ? stepOverlays : undefined,
+    placedBothDarts,
+    isSova,
+    isDouble,
+  };
+}
+
+// Tag badges + non-per-step dart indicators, overlaid on a step image.
+function LineupOverlayBadges({
+  lineup,
+  isSova,
+  isDouble,
+  placedBothDarts,
+  reserveKebab,
+  big = false,
+}: {
+  lineup: Lineup;
+  isSova: boolean;
+  isDouble: boolean;
+  placedBothDarts: boolean;
+  reserveKebab: boolean;
+  big?: boolean;
+}) {
+  const dartVariant = big ? "full" : "badge";
+  return (
+    <div
+      className={`pointer-events-none absolute left-2 top-2 z-[5] flex flex-col items-start gap-1 ${
+        reserveKebab ? "right-11" : "right-2"
+      }`}
+    >
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="rounded bg-black/70 px-2 py-0.5 text-xs">
+          {lineup.side}
+        </span>
+        {lineup.site && (
+          <span className="rounded bg-accent/80 px-2 py-0.5 text-xs font-semibold text-white">
+            {lineup.site === "Mid" ? "Mid" : `${lineup.site} Site`}
+          </span>
+        )}
+        {lineup.plantSpot && (
+          <span className="rounded bg-black/70 px-2 py-0.5 text-xs">
+            {lineup.plantSpot}
+          </span>
+        )}
+        {lineup.doubleShock && (
+          <span className="rounded bg-accent/80 px-2 py-0.5 text-xs font-semibold text-white">
+            Double Shock
+          </span>
+        )}
+        {lineup.jump && lineup.agentSlug !== "sova" && (
+          <span className="rounded bg-accent/80 px-2 py-0.5 text-xs font-semibold text-white">
+            Jump
+          </span>
+        )}
+      </div>
+      {isSova && !isDouble && (lineup.charge != null || lineup.jump) && (
+        <SovaIndicator
+          charge={lineup.charge}
+          bounces={lineup.bounces}
+          jump={lineup.jump}
+          variant={dartVariant}
+        />
+      )}
+      {isSova && isDouble && !placedBothDarts && (
+        <div className="flex items-start gap-1">
+          <SovaIndicator
+            title={big ? "First Dart" : undefined}
+            charge={lineup.charge}
+            bounces={lineup.bounces}
+            jump={lineup.jump}
+            variant={dartVariant}
+          />
+          <SovaIndicator
+            title={big ? "Second Dart" : undefined}
+            charge={lineup.charge2}
+            bounces={lineup.bounces2}
+            jump={lineup.jump2}
+            variant={dartVariant}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Full-screen carousel lightbox opened by clicking a card's image.
+function LineupLightbox({
+  lineup,
+  onClose,
+}: {
+  lineup: Lineup;
+  onClose: () => void;
+}) {
+  const steps = lineup.steps ?? [];
+  const { stepOverlays, placedBothDarts, isSova, isDouble } =
+    buildCardDartOverlays(lineup, "full");
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 sm:p-8"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-5xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          aria-label="Close preview"
+          className="absolute -top-9 right-0 flex items-center gap-1 text-sm text-white/70 hover:text-white"
+        >
+          ✕ Close
+        </button>
+        <div className="relative">
+          <StepCarousel steps={steps} overlays={stepOverlays} enableKeyboard />
+          <LineupOverlayBadges
+            lineup={lineup}
+            isSova={isSova}
+            isDouble={isDouble}
+            placedBothDarts={placedBothDarts}
+            reserveKebab={false}
+            big
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LineupCard({
   lineup,
   canEdit,
@@ -628,52 +825,11 @@ function LineupCard({
   const steps = lineup.steps ?? [];
   const hasSteps = steps.length > 0;
   const [menuOpen, setMenuOpen] = useState(false);
+  const [lightbox, setLightbox] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const isSova = lineup.agentSlug === "sova";
-  const isDouble = isSova && !!lineup.doubleShock;
-
-  // For double-shock lineups, pin each dart's intensity onto its "aim" step so
-  // both darts are visible while flipping through the carousel.
-  let stepOverlays: (React.ReactNode | null)[] | undefined;
-  let placedBothDarts = false;
-  if (isDouble && hasSteps) {
-    let p1 = false;
-    let p2 = false;
-    stepOverlays = steps.map((s, i) => {
-      const c = s.caption.toLowerCase();
-      if (!c.includes("aim")) return null;
-      const isSecond = c.includes("second") || c.includes("2nd");
-      const isFirst = c.includes("first") || c.includes("1st");
-      if (isSecond) {
-        p2 = true;
-        return (
-          <SovaIndicator
-            key={i}
-            charge={lineup.charge2}
-            bounces={lineup.bounces2}
-            jump={lineup.jump2}
-          />
-        );
-      }
-      if (isFirst) {
-        p1 = true;
-        return (
-          <SovaIndicator
-            key={i}
-            charge={lineup.charge}
-            bounces={lineup.bounces}
-            jump={lineup.jump}
-          />
-        );
-      }
-      return null;
-    });
-    placedBothDarts = p1 && p2;
-    // If we couldn't place both darts on aim steps, fall back to a stacked
-    // badge overlay so no intensity gets lost.
-    if (!placedBothDarts) stepOverlays = undefined;
-  }
+  const { stepOverlays, placedBothDarts, isSova, isDouble } =
+    buildCardDartOverlays(lineup);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -707,6 +863,16 @@ function LineupCard({
               onClick={(e) => {
                 e.stopPropagation();
                 setMenuOpen(false);
+                setLightbox(true);
+              }}
+              className="block w-full px-3 py-2 text-left text-sm hover:bg-panel-border"
+            >
+              Preview
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen(false);
                 onEdit();
               }}
               className="block w-full px-3 py-2 text-left text-sm hover:bg-panel-border"
@@ -733,7 +899,7 @@ function LineupCard({
         {hasSteps ? (
           <StepCarousel
             steps={steps}
-            onImageClick={onOpen}
+            onImageClick={() => setLightbox(true)}
             enableKeyboard={false}
             overlays={stepOverlays}
           />
@@ -747,59 +913,18 @@ function LineupCard({
         )}
 
         {/* Overlays (non-interactive) */}
-        <div
-          className={`pointer-events-none absolute left-2 top-2 z-[5] flex flex-col items-start gap-1 ${
-            canEdit ? "right-11" : "right-2"
-          }`}
-        >
-          <div className="flex flex-wrap items-center gap-1">
-            <span className="rounded bg-black/70 px-2 py-0.5 text-xs">
-              {lineup.side}
-            </span>
-            {lineup.site && (
-              <span className="rounded bg-accent/80 px-2 py-0.5 text-xs font-semibold text-white">
-                {lineup.site === "Mid" ? "Mid" : `${lineup.site} Site`}
-              </span>
-            )}
-            {lineup.plantSpot && (
-              <span className="rounded bg-black/70 px-2 py-0.5 text-xs">
-                {lineup.plantSpot}
-              </span>
-            )}
-            {lineup.doubleShock && (
-              <span className="rounded bg-accent/80 px-2 py-0.5 text-xs font-semibold text-white">
-                Double Shock
-              </span>
-            )}
-            {lineup.jump && lineup.agentSlug !== "sova" && (
-              <span className="rounded bg-accent/80 px-2 py-0.5 text-xs font-semibold text-white">
-                Jump
-              </span>
-            )}
-          </div>
-          {isSova && !isDouble && (lineup.charge != null || lineup.jump) && (
-            <SovaIndicator
-              charge={lineup.charge}
-              bounces={lineup.bounces}
-              jump={lineup.jump}
-            />
-          )}
-          {isSova && isDouble && !placedBothDarts && (
-            <div className="flex items-start gap-1">
-              <SovaIndicator
-                charge={lineup.charge}
-                bounces={lineup.bounces}
-                jump={lineup.jump}
-              />
-              <SovaIndicator
-                charge={lineup.charge2}
-                bounces={lineup.bounces2}
-                jump={lineup.jump2}
-              />
-            </div>
-          )}
-        </div>
+        <LineupOverlayBadges
+          lineup={lineup}
+          isSova={isSova}
+          isDouble={isDouble}
+          placedBothDarts={placedBothDarts}
+          reserveKebab={canEdit}
+        />
       </div>
+
+      {lightbox && (
+        <LineupLightbox lineup={lineup} onClose={() => setLightbox(false)} />
+      )}
 
       <button onClick={onOpen} className="block w-full text-left">
         <div className="p-4">
@@ -845,6 +970,75 @@ function ModalShell({
   );
 }
 
+// Full dart-strength panels placed under their matching aim steps in the detail
+// view. Returns per-step nodes (aligned to steps) and whether every dart was
+// placed — if not, the caller shows a fallback panel at the top instead.
+function buildDetailDartOverlays(lineup: Lineup): {
+  overlays: (React.ReactNode | null)[];
+  placedAll: boolean;
+} {
+  const steps = lineup.steps ?? [];
+  const none = { overlays: steps.map(() => null), placedAll: false };
+  if (lineup.agentSlug !== "sova") return none;
+
+  if (lineup.doubleShock) {
+    let p1 = false;
+    let p2 = false;
+    const overlays = steps.map((s, i) => {
+      const dart = dartOfCaption(s.caption);
+      if (dart === 2) {
+        p2 = true;
+        return (
+          <SovaIndicator
+            key={i}
+            title="Second Dart"
+            charge={lineup.charge2}
+            bounces={lineup.bounces2}
+            jump={lineup.jump2}
+            variant="full"
+          />
+        );
+      }
+      if (dart === 1) {
+        p1 = true;
+        return (
+          <SovaIndicator
+            key={i}
+            title="First Dart"
+            charge={lineup.charge}
+            bounces={lineup.bounces}
+            jump={lineup.jump}
+            variant="full"
+          />
+        );
+      }
+      return null;
+    });
+    return p1 && p2 ? { overlays, placedAll: true } : none;
+  }
+
+  // Single dart: place the strength under the first "aim" step.
+  if (lineup.charge == null && !lineup.jump && !lineup.ability) return none;
+  let placed = false;
+  const overlays = steps.map((s, i) => {
+    if (!placed && s.caption.toLowerCase().includes("aim")) {
+      placed = true;
+      return (
+        <SovaIndicator
+          key={i}
+          ability={lineup.ability}
+          charge={lineup.charge}
+          bounces={lineup.bounces}
+          jump={lineup.jump}
+          variant="full"
+        />
+      );
+    }
+    return null;
+  });
+  return placed ? { overlays, placedAll: true } : none;
+}
+
 function LineupModal({
   lineup,
   onClose,
@@ -855,6 +1049,8 @@ function LineupModal({
   const agent = getAgent(lineup.agentSlug);
   const steps = lineup.steps ?? [];
   const hasVisibleSteps = steps.some((s) => s.image || s.caption.trim());
+  const { overlays: detailOverlays, placedAll } =
+    buildDetailDartOverlays(lineup);
 
   return (
     <ModalShell onClose={onClose}>
@@ -879,7 +1075,10 @@ function LineupModal({
         </button>
       </div>
       <div className="p-5 space-y-5">
-        {lineup.agentSlug === "sova" &&
+        {/* Dart strengths are shown under their aim steps below; only fall back
+            to a top panel when we couldn't place them on a step. */}
+        {!placedAll &&
+          lineup.agentSlug === "sova" &&
           (lineup.doubleShock ? (
             <div className="flex flex-wrap gap-3">
               <SovaIndicator
@@ -937,6 +1136,9 @@ function LineupModal({
                     alt={s.caption || `Step ${i + 1}`}
                     className="w-full rounded-lg border border-panel-border"
                   />
+                )}
+                {detailOverlays[i] && (
+                  <div className="mt-2">{detailOverlays[i]}</div>
                 )}
               </figure>
             ))}
