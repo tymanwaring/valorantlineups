@@ -630,6 +630,51 @@ function LineupCard({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  const isSova = lineup.agentSlug === "sova";
+  const isDouble = isSova && !!lineup.doubleShock;
+
+  // For double-shock lineups, pin each dart's intensity onto its "aim" step so
+  // both darts are visible while flipping through the carousel.
+  let stepOverlays: (React.ReactNode | null)[] | undefined;
+  let placedBothDarts = false;
+  if (isDouble && hasSteps) {
+    let p1 = false;
+    let p2 = false;
+    stepOverlays = steps.map((s, i) => {
+      const c = s.caption.toLowerCase();
+      if (!c.includes("aim")) return null;
+      const isSecond = c.includes("second") || c.includes("2nd");
+      const isFirst = c.includes("first") || c.includes("1st");
+      if (isSecond) {
+        p2 = true;
+        return (
+          <SovaIndicator
+            key={i}
+            charge={lineup.charge2}
+            bounces={lineup.bounces2}
+            jump={lineup.jump2}
+          />
+        );
+      }
+      if (isFirst) {
+        p1 = true;
+        return (
+          <SovaIndicator
+            key={i}
+            charge={lineup.charge}
+            bounces={lineup.bounces}
+            jump={lineup.jump}
+          />
+        );
+      }
+      return null;
+    });
+    placedBothDarts = p1 && p2;
+    // If we couldn't place both darts on aim steps, fall back to a stacked
+    // badge overlay so no intensity gets lost.
+    if (!placedBothDarts) stepOverlays = undefined;
+  }
+
   useEffect(() => {
     if (!menuOpen) return;
     function onDocClick(e: MouseEvent) {
@@ -690,6 +735,7 @@ function LineupCard({
             steps={steps}
             onImageClick={onOpen}
             enableKeyboard={false}
+            overlays={stepOverlays}
           />
         ) : (
           <button
@@ -701,7 +747,11 @@ function LineupCard({
         )}
 
         {/* Overlays (non-interactive) */}
-        <div className="pointer-events-none absolute left-2 top-2 z-10 flex flex-col items-start gap-1">
+        <div
+          className={`pointer-events-none absolute left-2 top-2 z-[5] flex flex-col items-start gap-1 ${
+            canEdit ? "right-11" : "right-2"
+          }`}
+        >
           <div className="flex flex-wrap items-center gap-1">
             <span className="rounded bg-black/70 px-2 py-0.5 text-xs">
               {lineup.side}
@@ -727,14 +777,27 @@ function LineupCard({
               </span>
             )}
           </div>
-          {lineup.agentSlug === "sova" &&
-            (lineup.charge != null || lineup.jump) && (
+          {isSova && !isDouble && (lineup.charge != null || lineup.jump) && (
+            <SovaIndicator
+              charge={lineup.charge}
+              bounces={lineup.bounces}
+              jump={lineup.jump}
+            />
+          )}
+          {isSova && isDouble && !placedBothDarts && (
+            <div className="flex items-start gap-1">
               <SovaIndicator
                 charge={lineup.charge}
                 bounces={lineup.bounces}
                 jump={lineup.jump}
               />
-            )}
+              <SovaIndicator
+                charge={lineup.charge2}
+                bounces={lineup.bounces2}
+                jump={lineup.jump2}
+              />
+            </div>
+          )}
         </div>
       </div>
 

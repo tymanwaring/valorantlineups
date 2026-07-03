@@ -1,17 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { LineupStep } from "@/lib/types";
 
 export default function StepCarousel({
   steps,
   onImageClick,
   enableKeyboard = true,
+  overlays,
 }: {
   steps: LineupStep[];
   /** When set, clicking the image (not the controls) calls this. */
   onImageClick?: () => void;
   enableKeyboard?: boolean;
+  /** Optional per-step overlay node shown above the caption (aligned to steps). */
+  overlays?: (ReactNode | null)[];
 }) {
   const n = steps.length;
   const [i, setI] = useState(0);
@@ -67,6 +70,9 @@ export default function StepCarousel({
 
           {/* Caption overlay */}
           <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-4 pt-10">
+            {overlays?.[current] && (
+              <div className="mb-2 flex">{overlays[current]}</div>
+            )}
             <div className="flex items-end justify-between gap-3">
               <p className="text-sm font-semibold text-white">
                 <span className="mr-2 text-accent">{current + 1}.</span>
