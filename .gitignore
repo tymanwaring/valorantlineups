@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node (each app also has its own ignore)
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor / Cursor workspace
+.cursor/
+
+# Generated Google-Docs map images (regenerate with scripts/build_lineups.py).
+# The website's own map images live in web/public/maps and ARE committed.
+/lineups/

@@ -1,0 +1,183 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0f1419;
+  --foreground: #ece8e1;
+  --accent: #ff4655;
+  --panel: #1a2028;
+  --panel-border: #2a3340;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-accent: var(--accent);
+  --color-panel: var(--panel);
+  --color-panel-border: var(--panel-border);
+  --font-sans: var(--font-geist-sans);
+  --font-display: var(--font-valorant);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-valorant), Arial, sans-serif;
+  letter-spacing: 0.04em;
+}
+
+/* ---- Cinematic Attack / Defense side selector ---- */
+.side-split {
+  position: relative;
+  overflow: hidden;
+}
+
+.side-half {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transition:
+    filter 0.5s ease,
+    transform 0.6s ease;
+}
+
+.side-half > .side-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  transform: scale(1.05);
+  transition: transform 0.8s ease;
+}
+
+.side-attack {
+  clip-path: polygon(0 0, 55% 0, 43% 100%, 0 100%);
+  justify-content: flex-start;
+}
+
+.side-defense {
+  clip-path: polygon(57% 0, 100% 0, 100% 100%, 45% 100%);
+  justify-content: flex-end;
+}
+
+/* Cinematic cross-dim: hovering one side dims the other. */
+.side-split:has(.side-attack:hover) .side-defense,
+.side-split:has(.side-defense:hover) .side-attack {
+  filter: brightness(0.35) saturate(0.5);
+}
+
+.side-half:hover > .side-bg {
+  transform: scale(1.12);
+}
+
+/* Diagonal slash between the two halves (neutral by default, tints on hover). */
+.side-slash {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(255, 255, 255, 0.85) 15%,
+    rgba(255, 255, 255, 0.95) 50%,
+    rgba(255, 255, 255, 0.85) 85%,
+    transparent
+  );
+  /* Center of the gap between the two clip-paths: 56% at top → 44% at bottom. */
+  clip-path: polygon(55.7% 0, 56.3% 0, 44.3% 100%, 43.7% 100%);
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.35));
+  transition: filter 0.4s ease;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.side-split:has(.side-attack:hover) .side-slash {
+  filter: drop-shadow(0 0 10px rgba(255, 70, 85, 0.7));
+}
+
+.side-split:has(.side-defense:hover) .side-slash {
+  filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.7));
+}
+
+/* ---- Corroding black side-switch transition ---- */
+.corrode-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Black disc with a soft, noisy edge that corrodes/dissolves outward. */
+.corrode-fill {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 300vmax;
+  height: 300vmax;
+  margin-left: -150vmax;
+  margin-top: -150vmax;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle,
+    #000 0%,
+    #000 50%,
+    rgba(0, 0, 0, 0.9) 64%,
+    rgba(0, 0, 0, 0.55) 77%,
+    rgba(0, 0, 0, 0.22) 88%,
+    transparent 96%
+  );
+  filter: url(#corrode-filter);
+  transform: scale(0);
+  animation: corrodeFill 1s cubic-bezier(0.6, 0, 0.35, 1) forwards;
+}
+
+@keyframes corrodeFill {
+  0% {
+    transform: scale(0);
+  }
+  44% {
+    transform: scale(1);
+  }
+  60% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(0);
+  }
+}
+
+.corrode-core {
+  position: relative;
+  z-index: 2;
+  filter: drop-shadow(0 0 22px rgba(255, 255, 255, 0.35));
+  animation: corrodeCore 1s ease-in-out forwards;
+}
+
+@keyframes corrodeCore {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  36% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  60% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+}
