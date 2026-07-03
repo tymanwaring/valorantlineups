@@ -31,11 +31,13 @@ export default function MapClient({
   mapName,
   mapImage,
   lineups,
+  canEdit,
 }: {
   mapSlug: string;
   mapName: string;
   mapImage: string;
   lineups: Lineup[];
+  canEdit: boolean;
 }) {
   const router = useRouter();
   const [side, setSide] = useState<Side | null>(null);
@@ -196,12 +198,14 @@ export default function MapClient({
                     : ""}
                   {agent !== "all" ? ` (${getAgent(agent)?.name})` : ""}.
                 </p>
-                <Link
-                  href="/admin"
-                  className="mt-4 inline-block rounded bg-accent px-4 py-2 text-sm font-semibold text-white"
-                >
-                  + Add the first lineup
-                </Link>
+                {canEdit && (
+                  <Link
+                    href="/admin"
+                    className="mt-4 inline-block rounded bg-accent px-4 py-2 text-sm font-semibold text-white"
+                  >
+                    + Add the first lineup
+                  </Link>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -209,6 +213,7 @@ export default function MapClient({
                   <LineupCard
                     key={l.id}
                     lineup={l}
+                    canEdit={canEdit}
                     onOpen={() => setViewing(l)}
                     onEdit={() => setEditing(l)}
                     onDelete={() => setDeleting(l)}
@@ -411,11 +416,13 @@ function FilterChip({
 
 function LineupCard({
   lineup,
+  canEdit,
   onOpen,
   onEdit,
   onDelete,
 }: {
   lineup: Lineup;
+  canEdit: boolean;
   onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -439,7 +446,8 @@ function LineupCard({
 
   return (
     <div className="relative rounded-lg border border-panel-border bg-panel overflow-hidden hover:border-accent/60 transition">
-      {/* Kebab menu */}
+      {/* Kebab menu (admin only) */}
+      {canEdit && (
       <div ref={menuRef} className="absolute top-2 right-2 z-10">
         <button
           aria-label="Lineup options"
@@ -476,6 +484,7 @@ function LineupCard({
           </div>
         )}
       </div>
+      )}
 
       {/* Media preview: step carousel with captions */}
       <div className="relative">

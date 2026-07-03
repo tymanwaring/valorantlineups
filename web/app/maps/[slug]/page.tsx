@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getMap, MAPS } from "@/lib/maps";
 import { getLineupsForMap } from "@/lib/store";
+import { canManage } from "@/lib/session";
 import MapClient from "./MapClient";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ export default async function MapPage({
   if (!map) notFound();
 
   const lineups = await getLineupsForMap(map.slug);
+  const canEdit = await canManage();
 
   return (
     <MapClient
@@ -26,6 +28,7 @@ export default async function MapPage({
       mapName={map.name}
       mapImage={map.image}
       lineups={lineups}
+      canEdit={canEdit}
     />
   );
 }

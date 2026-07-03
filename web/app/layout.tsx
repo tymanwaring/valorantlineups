@@ -2,13 +2,9 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import localFont from "next/font/local";
 import Link from "next/link";
-import { cookies } from "next/headers";
 import "./globals.css";
-import {
-  SESSION_COOKIE,
-  adminAuthEnabled,
-  expectedToken,
-} from "@/lib/auth";
+import { adminAuthEnabled } from "@/lib/auth";
+import { canManage } from "@/lib/session";
 import LogoutButton from "./components/LogoutButton";
 
 const geistSans = Geist({
@@ -32,12 +28,9 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  let loggedIn = false;
-  if (adminAuthEnabled()) {
-    const token = (await cookies()).get(SESSION_COOKIE)?.value;
-    const expected = await expectedToken();
-    loggedIn = !!token && !!expected && token === expected;
-  }
+  const manage = await canManage();
+  // Only surface the logout button when a real password gate is active.
+  const loggedIn = adminAuthEnabled() && manage;
 
   return (
     <html
@@ -54,18 +47,22 @@ export default async function RootLayout({
               <Link href="/" className="hover:text-accent transition-colors">
                 Maps
               </Link>
-              <Link
-                href="/admin/rotation"
-                className="hover:text-accent transition-colors"
-              >
-                Rotation
-              </Link>
-              <Link
-                href="/admin"
-                className="rounded bg-accent px-3 py-1.5 text-white hover:opacity-90 transition"
-              >
-                + Add Lineup
-              </Link>
+              {manage && (
+                <Link
+                  href="/admin/rotation"
+                  className="hover:text-accent transition-colors"
+                >
+                  Rotation
+                </Link>
+              )}
+              {manage && (
+                <Link
+                  href="/admin"
+                  className="rounded bg-accent px-3 py-1.5 text-white hover:opacity-90 transition"
+                >
+                  + Add Lineup
+                </Link>
+              )}
               {loggedIn && <LogoutButton />}
             </nav>
           </div>

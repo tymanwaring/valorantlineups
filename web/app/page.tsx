@@ -3,13 +3,15 @@ import Image from "next/image";
 import { MAPS, type MapInfo } from "@/lib/maps";
 import { getLineups } from "@/lib/store";
 import { getRotation } from "@/lib/rotation";
+import { canManage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [lineups, rotation] = await Promise.all([
+  const [lineups, rotation, canEdit] = await Promise.all([
     getLineups(),
     getRotation(),
+    canManage(),
   ]);
 
   const counts = new Map<string, number>();
@@ -32,12 +34,14 @@ export default async function Home() {
             Choose a map to browse lineups by agent.
           </p>
         </div>
-        <Link
-          href="/admin/rotation"
-          className="hidden shrink-0 rounded border border-panel-border bg-panel px-3 py-2 text-sm hover:border-accent/60 sm:block"
-        >
-          Edit rotation
-        </Link>
+        {canEdit && (
+          <Link
+            href="/admin/rotation"
+            className="hidden shrink-0 rounded border border-panel-border bg-panel px-3 py-2 text-sm hover:border-accent/60 sm:block"
+          >
+            Edit rotation
+          </Link>
+        )}
       </div>
 
       <Section
