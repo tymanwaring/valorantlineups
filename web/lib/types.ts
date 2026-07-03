@@ -16,12 +16,16 @@ export type Lineup = {
   plantSpot?: string;
   steps: LineupStep[];
   notes?: string;
-  /** Sova Recon/Shock Dart charge level (1-3 bars). */
+  /** Sova Recon/Shock Dart charge level (1-3 bars). First dart when double-shock. */
   charge?: number;
-  /** Sova Recon/Shock Dart bounce count (0-2). */
+  /** Sova Recon/Shock Dart bounce count (0-2). First dart when double-shock. */
   bounces?: number;
   /** Sova Shock Dart double-shock (two darts) lineup. */
   doubleShock?: boolean;
+  /** Second dart charge level (double-shock only). */
+  charge2?: number;
+  /** Second dart bounce count (double-shock only). */
+  bounces2?: number;
   createdAt: string;
 
   /** @deprecated use steps[]; kept so legacy records still typecheck */

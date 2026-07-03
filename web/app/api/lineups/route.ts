@@ -76,6 +76,9 @@ export async function POST(req: NextRequest) {
     charge: agentSlug === "sova" ? charge : undefined,
     bounces: agentSlug === "sova" ? bounces : undefined,
     doubleShock: doubleShock || undefined,
+    // Second dart values only apply to double-shock lineups.
+    charge2: doubleShock ? parseIntField(form.get("charge2"), 0, 3) : undefined,
+    bounces2: doubleShock ? parseIntField(form.get("bounces2"), 0, 2) : undefined,
     notes: notes || undefined,
   };
 

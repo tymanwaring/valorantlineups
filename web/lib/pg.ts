@@ -104,6 +104,8 @@ async function ensureSchema(): Promise<void> {
           charge int,
           bounces int,
           double_shock boolean NOT NULL DEFAULT false,
+          charge2 int,
+          bounces2 int,
           notes text,
           created_at timestamptz NOT NULL DEFAULT now()
         )
@@ -115,6 +117,8 @@ async function ensureSchema(): Promise<void> {
       await q`ALTER TABLE lineups ADD COLUMN IF NOT EXISTS site text`;
       await q`ALTER TABLE lineups ADD COLUMN IF NOT EXISTS plant_spot text`;
       await q`ALTER TABLE lineups ADD COLUMN IF NOT EXISTS double_shock boolean NOT NULL DEFAULT false`;
+      await q`ALTER TABLE lineups ADD COLUMN IF NOT EXISTS charge2 int`;
+      await q`ALTER TABLE lineups ADD COLUMN IF NOT EXISTS bounces2 int`;
       await q`
         CREATE TABLE IF NOT EXISTS rotation (
           map_slug text PRIMARY KEY
@@ -177,6 +181,8 @@ function rowToLineup(r: Row): Lineup {
     charge: r.charge == null ? undefined : Number(r.charge),
     bounces: r.bounces == null ? undefined : Number(r.bounces),
     doubleShock: r.double_shock === true ? true : undefined,
+    charge2: r.charge2 == null ? undefined : Number(r.charge2),
+    bounces2: r.bounces2 == null ? undefined : Number(r.bounces2),
     notes: (r.notes as string) ?? undefined,
     createdAt:
       r.created_at instanceof Date
@@ -218,11 +224,11 @@ export async function pgAddLineup(data: NewLineup): Promise<Lineup> {
   const id = randomUUID();
   const createdAt = new Date().toISOString();
   await db()`
-    INSERT INTO lineups (id, map_slug, agent_slug, title, ability, side, site, plant_spot, steps, charge, bounces, double_shock, notes, created_at)
+    INSERT INTO lineups (id, map_slug, agent_slug, title, ability, side, site, plant_spot, steps, charge, bounces, double_shock, charge2, bounces2, notes, created_at)
     VALUES (
       ${id}::uuid, ${data.mapSlug}, ${data.agentSlug}, ${data.title}, ${data.ability ?? ""},
       ${data.side}, ${data.site ?? null}, ${data.plantSpot ?? null}, ${JSON.stringify(data.steps ?? [])}::jsonb, ${data.charge ?? null}, ${data.bounces ?? null},
-      ${data.doubleShock ?? false}, ${data.notes ?? null}, ${createdAt}
+      ${data.doubleShock ?? false}, ${data.charge2 ?? null}, ${data.bounces2 ?? null}, ${data.notes ?? null}, ${createdAt}
     )
   `;
   return { ...data, id, createdAt };
@@ -248,6 +254,8 @@ export async function pgUpdateLineup(
       charge = ${merged.charge ?? null},
       bounces = ${merged.bounces ?? null},
       double_shock = ${merged.doubleShock ?? false},
+      charge2 = ${merged.charge2 ?? null},
+      bounces2 = ${merged.bounces2 ?? null},
       notes = ${merged.notes ?? null}
     WHERE id = ${id}::uuid
   `;

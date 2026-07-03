@@ -631,15 +631,31 @@ function LineupModal({
       </div>
       <div className="p-5 space-y-5">
         {lineup.agentSlug === "sova" &&
-          (lineup.charge != null || lineup.doubleShock || lineup.ability) && (
-            <SovaIndicator
-              charge={lineup.charge}
-              bounces={lineup.bounces}
-              doubleShock={lineup.doubleShock}
-              ability={lineup.ability}
-              variant="full"
-            />
-          )}
+          (lineup.doubleShock ? (
+            <div className="flex flex-wrap gap-3">
+              <SovaIndicator
+                title="First Dart"
+                charge={lineup.charge}
+                bounces={lineup.bounces}
+                variant="full"
+              />
+              <SovaIndicator
+                title="Second Dart"
+                charge={lineup.charge2}
+                bounces={lineup.bounces2}
+                variant="full"
+              />
+            </div>
+          ) : (
+            (lineup.charge != null || lineup.ability) && (
+              <SovaIndicator
+                ability={lineup.ability}
+                charge={lineup.charge}
+                bounces={lineup.bounces}
+                variant="full"
+              />
+            )
+          ))}
         {lineup.notes && (
           <p className="text-foreground/80 whitespace-pre-line">
             {lineup.notes}
@@ -881,6 +897,8 @@ function EditLineupModal({
             show={agentSlug === "sova"}
             defaultCharge={lineup.charge}
             defaultBounces={lineup.bounces}
+            defaultCharge2={lineup.charge2}
+            defaultBounces2={lineup.bounces2}
             showDoubleShock={ability === "Shock Dart"}
             doubleShock={doubleShock}
             onDoubleShockChange={setDoubleShock}

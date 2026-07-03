@@ -86,10 +86,14 @@ export async function PATCH(
   }
 
   // Double Shock only applies to Sova Shock Dart lineups.
-  patch.doubleShock =
-    effectiveAgent === "sova" && effectiveAbility === "Shock Dart"
-      ? parseBool(form.get("doubleShock")) || undefined
-      : undefined;
+  const doubleShock =
+    effectiveAgent === "sova" &&
+    effectiveAbility === "Shock Dart" &&
+    parseBool(form.get("doubleShock"));
+  patch.doubleShock = doubleShock || undefined;
+  // Second dart values only apply to double-shock lineups.
+  patch.charge2 = doubleShock ? parseIntField(form.get("charge2"), 0, 3) : undefined;
+  patch.bounces2 = doubleShock ? parseIntField(form.get("bounces2"), 0, 2) : undefined;
 
   // Rebuild steps when the form includes them; clean up images no longer used.
   if (form.has("step-0-caption") || form.has("steps-present")) {
