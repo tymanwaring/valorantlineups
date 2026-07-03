@@ -4,7 +4,16 @@ import { randomUUID } from "crypto";
 import { put, del } from "@vercel/blob";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
-const blobEnabled = !!process.env.BLOB_READ_WRITE_TOKEN;
+
+// Vercel injects BLOB_READ_WRITE_TOKEN, but connecting a store with an env
+// prefix names it e.g. MYSTORE_BLOB_READ_WRITE_TOKEN. Accept either.
+function blobToken(): string | undefined {
+  if (process.env.BLOB_READ_WRITE_TOKEN) return process.env.BLOB_READ_WRITE_TOKEN;
+  const key = Object.keys(process.env).find((k) =>
+    k.endsWith("BLOB_READ_WRITE_TOKEN"),
+  );
+  return key ? process.env[key] : undefined;
+}
 
 /** Reject anything larger than this to avoid huge/abusive uploads. */
 export const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // 8 MB
@@ -64,12 +73,30 @@ export async function saveUpload(
 
   const filename = `${randomUUID()}${ext}`;
 
-  if (blobEnabled) {
-    const blob = await put(`lineups/${filename}`, buffer, {
-      access: "public",
-      addRandomSuffix: false,
-    });
-    return blob.url;
+  const token = blobToken();
+  if (token) {
+    try {
+      const blob = await put(`lineups/${filename}`, buffer, {
+        access: "public",
+        addRandomSuffix: false,
+        token,
+      });
+      return blob.url;
+    } catch (e) {
+      throw new UploadError(
+        `Image upload to blob storage failed: ${
+          e instanceof Error ? e.message : "unknown error"
+        }`,
+      );
+    }
+  }
+
+  // No blob token. The Vercel filesystem is read-only, so local writes only
+  // work in dev — surface a clear message instead of a 500 in production.
+  if (process.env.VERCEL) {
+    throw new UploadError(
+      "Image storage isn't configured. Set BLOB_READ_WRITE_TOKEN (Vercel Blob) for this project.",
+    );
   }
 
   await fs.mkdir(UPLOAD_DIR, { recursive: true });
@@ -81,9 +108,10 @@ export async function deleteUpload(publicPath?: string): Promise<void> {
   if (!publicPath) return;
 
   // Vercel Blob URLs are absolute (https://...); local uploads start with /uploads/.
-  if (blobEnabled && /^https?:\/\//.test(publicPath)) {
+  const token = blobToken();
+  if (token && /^https?:\/\//.test(publicPath)) {
     try {
-      await del(publicPath);
+      await del(publicPath, { token });
     } catch {
       // Already gone; ignore.
     }

@@ -13,6 +13,7 @@ import { SovaIndicator } from "@/app/components/SovaIndicator";
 import StepCarousel from "@/app/components/StepCarousel";
 
 type Side = "Attack" | "Defense";
+type View = Side | "all";
 
 // Fixed site buckets shown as filter chips in the map header.
 const SITE_FILTERS: { id: string; label: string }[] = [
@@ -24,6 +25,25 @@ const SITE_FILTERS: { id: string; label: string }[] = [
 
 function matchesSite(site: string | undefined, filter: string): boolean {
   return filter === "all" || site === filter;
+}
+
+// Flatten a lineup into one lowercase searchable string spanning its tags,
+// text and step captions so the map search can match on anything meaningful.
+function lineupHaystack(l: Lineup): string {
+  const parts: (string | undefined)[] = [
+    l.title,
+    l.notes,
+    l.ability,
+    l.site,
+    l.site === "Mid" ? "mid" : l.site ? `${l.site} site` : undefined,
+    l.plantSpot,
+    l.side,
+    getAgent(l.agentSlug)?.name,
+    l.agentSlug,
+    l.doubleShock ? "double shock" : undefined,
+    ...(l.steps?.map((s) => s.caption) ?? []),
+  ];
+  return parts.filter(Boolean).join(" ").toLowerCase();
 }
 
 export default function MapClient({
@@ -40,17 +60,20 @@ export default function MapClient({
   canEdit: boolean;
 }) {
   const router = useRouter();
-  const [side, setSide] = useState<Side | null>(null);
+  const [side, setSide] = useState<View | null>(null);
   const [switching, setSwitching] = useState(false);
   const [agent, setAgent] = useState<string>("all");
   const [siteFilter, setSiteFilter] = useState<string>("all");
   const [doubleShockOnly, setDoubleShockOnly] = useState(false);
+  const [query, setQuery] = useState("");
+  // Side filter used only within the combined "all" view.
+  const [allSideFilter, setAllSideFilter] = useState<"all" | Side>("all");
   const [viewing, setViewing] = useState<Lineup | null>(null);
   const [editing, setEditing] = useState<Lineup | null>(null);
   const [deleting, setDeleting] = useState<Lineup | null>(null);
 
   function switchSide() {
-    if (switching || !side) return;
+    if (switching || !side || side === "all") return;
     setSwitching(true);
     const other: Side = side === "Attack" ? "Defense" : "Attack";
     // Swap content while the corroding disc fully covers the screen (~44%).
@@ -59,6 +82,8 @@ export default function MapClient({
       setAgent("all");
       setSiteFilter("all");
       setDoubleShockOnly(false);
+      setQuery("");
+      setAllSideFilter("all");
     }, 440);
     window.setTimeout(() => setSwitching(false), 1000);
   }
@@ -66,8 +91,15 @@ export default function MapClient({
   const sideAccent = side === "Defense" ? "#38bdf8" : "#ff4655";
 
   const sideLineups = useMemo(
-    () => (side ? lineups.filter((l) => l.side === side) : []),
-    [side, lineups],
+    () =>
+      !side
+        ? []
+        : side === "all"
+          ? allSideFilter === "all"
+            ? lineups
+            : lineups.filter((l) => l.side === allSideFilter)
+          : lineups.filter((l) => l.side === side),
+    [side, lineups, allSideFilter],
   );
 
   // Lineups for the current side AND site filter — drives both the agent chips
@@ -99,14 +131,39 @@ export default function MapClient({
     if (doubleShockOnly && !hasDoubleShock) setDoubleShockOnly(false);
   }, [doubleShockOnly, hasDoubleShock]);
 
+  // Remember the current map/side/agent so the header "+ Add Lineup" button can
+  // prefill the Add form with whatever the user is currently viewing.
+  useEffect(() => {
+    if (!side) return;
+    try {
+      sessionStorage.setItem(
+        "addLineupContext",
+        JSON.stringify({
+          map: mapSlug,
+          side: side === "all" ? undefined : side,
+          agent,
+        }),
+      );
+    } catch {
+      // Storage unavailable (private mode etc.) — non-critical.
+    }
+  }, [mapSlug, side, agent]);
+
   const filtered = useMemo(() => {
     let out =
       agent === "all"
         ? siteLineups
         : siteLineups.filter((l) => l.agentSlug === agent);
     if (doubleShockOnly) out = out.filter((l) => l.doubleShock);
+    const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (terms.length) {
+      out = out.filter((l) => {
+        const hay = lineupHaystack(l);
+        return terms.every((t) => hay.includes(t));
+      });
+    }
     return out;
-  }, [agent, siteLineups, doubleShockOnly]);
+  }, [agent, siteLineups, doubleShockOnly, query]);
 
   return (
     <div
@@ -165,6 +222,8 @@ export default function MapClient({
               setAgent("all");
               setSiteFilter("all");
               setDoubleShockOnly(false);
+              setQuery("");
+              setAllSideFilter("all");
             }}
           />
         ) : (
@@ -174,57 +233,110 @@ export default function MapClient({
             <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <span className="font-display text-2xl tracking-widest text-accent transition-colors duration-300">
-                  {side}
+                  {side === "all" ? "All Lineups" : side}
                 </span>
                 <span className="text-foreground/40">{mapName}</span>
               </div>
-              <button
-                onClick={switchSide}
-                disabled={switching}
-                className="rounded-full border border-panel-border bg-panel px-4 py-1.5 text-sm hover:border-accent/60 disabled:opacity-60"
-              >
-                Switch to {side === "Attack" ? "Defense" : "Attack"}
-              </button>
+              {side === "all" ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  {(["Attack", "Defense"] as Side[]).map((s) => {
+                    const active = allSideFilter === s;
+                    return (
+                      <button
+                        key={s}
+                        onClick={() =>
+                          setAllSideFilter((prev) => (prev === s ? "all" : s))
+                        }
+                        className={`rounded-full border px-4 py-1.5 text-sm transition ${
+                          active
+                            ? "border-accent bg-accent text-white"
+                            : "border-panel-border bg-panel hover:border-accent/60"
+                        }`}
+                      >
+                        {s} only
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setSide("all");
+                      setAllSideFilter("all");
+                    }}
+                    className="rounded-full border border-panel-border bg-panel px-4 py-1.5 text-sm hover:border-accent/60"
+                  >
+                    View all
+                  </button>
+                  <button
+                    onClick={switchSide}
+                    disabled={switching}
+                    className="rounded-full border border-panel-border bg-panel px-4 py-1.5 text-sm hover:border-accent/60 disabled:opacity-60"
+                  >
+                    Switch to {side === "Attack" ? "Defense" : "Attack"}
+                  </button>
+                </div>
+              )}
             </div>
 
-            <div className="mb-6 flex flex-wrap items-center gap-2">
-              <FilterChip
-                label="All"
-                active={agent === "all"}
-                onClick={() => setAgent("all")}
-              />
-              {agentsWithLineups.map((a) => (
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
                 <FilterChip
-                  key={a.slug}
-                  label={a.name}
-                  active={agent === a.slug}
-                  onClick={() => setAgent(a.slug)}
+                  label="All"
+                  active={agent === "all"}
+                  onClick={() => setAgent("all")}
                 />
-              ))}
-              {hasDoubleShock && (
-                <>
-                  <span className="mx-1 h-5 w-px self-center bg-panel-border" />
+                {agentsWithLineups.map((a) => (
                   <FilterChip
-                    label="Double Shock"
-                    active={doubleShockOnly}
-                    onClick={() => setDoubleShockOnly((v) => !v)}
+                    key={a.slug}
+                    label={a.name}
+                    active={agent === a.slug}
+                    onClick={() => setAgent(a.slug)}
                   />
-                </>
-              )}
+                ))}
+                {hasDoubleShock && (
+                  <>
+                    <span className="mx-1 h-5 w-px self-center bg-panel-border" />
+                    <FilterChip
+                      label="Double Shock"
+                      active={doubleShockOnly}
+                      onClick={() => setDoubleShockOnly((v) => !v)}
+                    />
+                  </>
+                )}
+              </div>
+              <LineupSearch value={query} onChange={setQuery} />
             </div>
 
             {filtered.length === 0 ? (
               <div className="rounded-lg border border-dashed border-panel-border p-10 text-center">
-                <p className="text-foreground/60">
-                  No {side} lineups yet for {mapName}
-                  {siteFilter !== "all"
-                    ? ` on ${SITE_FILTERS.find((s) => s.id === siteFilter)?.label}`
-                    : ""}
-                  {agent !== "all" ? ` (${getAgent(agent)?.name})` : ""}.
-                </p>
-                {canEdit && (
+                {query.trim() ? (
+                  <p className="text-foreground/60">
+                    No lineups match &ldquo;{query.trim()}&rdquo;.{" "}
+                    <button
+                      type="button"
+                      onClick={() => setQuery("")}
+                      className="text-accent hover:underline"
+                    >
+                      Clear search
+                    </button>
+                  </p>
+                ) : (
+                  <p className="text-foreground/60">
+                    No {side === "all" ? "" : `${side} `}lineups yet for{" "}
+                    {mapName}
+                    {siteFilter !== "all"
+                      ? ` on ${SITE_FILTERS.find((s) => s.id === siteFilter)?.label}`
+                      : ""}
+                    {agent !== "all" ? ` (${getAgent(agent)?.name})` : ""}.
+                  </p>
+                )}
+                {!query.trim() && canEdit && (
                   <Link
-                    href="/admin"
+                    href={`/admin?map=${mapSlug}${side ? `&side=${side}` : ""}${
+                      agent !== "all" ? `&agent=${agent}` : ""
+                    }`}
                     className="mt-4 inline-block rounded bg-accent px-4 py-2 text-sm font-semibold text-white"
                   >
                     + Add the first lineup
@@ -287,10 +399,28 @@ function SideSelect({
   mapName: string;
   mapImage: string;
   counts: { Attack: number; Defense: number };
-  onChoose: (side: "Attack" | "Defense") => void;
+  onChoose: (side: View) => void;
 }) {
+  const total = counts.Attack + counts.Defense;
   return (
-    <div className="side-split h-[62vh] min-h-[460px] w-full rounded-xl border border-panel-border">
+    <div>
+      <div className="mb-5 flex flex-col items-center gap-4">
+        <button
+          type="button"
+          onClick={() => onChoose("all")}
+          className="w-full max-w-md rounded-xl border border-panel-border bg-panel px-8 py-4 text-lg font-semibold text-foreground transition hover:border-accent/60 hover:text-accent"
+        >
+          See all lineups
+          <span className="ml-2 text-base text-foreground/40">{total}</span>
+        </button>
+        <div className="flex w-full max-w-md items-center gap-3 text-foreground/40">
+          <span className="h-px flex-1 bg-panel-border" />
+          <span className="text-xs uppercase tracking-[0.3em]">or</span>
+          <span className="h-px flex-1 bg-panel-border" />
+        </div>
+      </div>
+
+      <div className="side-split h-[62vh] min-h-[460px] w-full rounded-xl border border-panel-border">
       {/* Attack half */}
       <button
         type="button"
@@ -356,6 +486,7 @@ function SideSelect({
         <p className="mt-1 text-xs font-semibold uppercase tracking-[0.3em] text-white/80 drop-shadow-[0_1px_8px_rgba(0,0,0,0.95)]">
           Choose your side
         </p>
+      </div>
       </div>
     </div>
   );
@@ -432,6 +563,49 @@ function FilterChip({
     >
       {label}
     </button>
+  );
+}
+
+function LineupSearch({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="relative w-full sm:w-64">
+      <svg
+        viewBox="0 0 24 24"
+        aria-hidden
+        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/40"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <circle cx="11" cy="11" r="7" />
+        <path d="m21 21-4.3-4.3" />
+      </svg>
+      <input
+        type="search"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Search lineups…"
+        className="w-full rounded-full border border-panel-border bg-panel py-1.5 pl-9 pr-8 text-sm text-foreground placeholder:text-foreground/40 focus:border-accent/60 focus:outline-none"
+      />
+      {value && (
+        <button
+          type="button"
+          aria-label="Clear search"
+          onClick={() => onChange("")}
+          className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-foreground/50 hover:bg-panel-border hover:text-foreground"
+        >
+          &times;
+        </button>
+      )}
+    </div>
   );
 }
 

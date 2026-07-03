@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MAPS } from "@/lib/maps";
@@ -23,6 +23,17 @@ export default function AdminPage() {
   const abilities = getAgent(agentSlug)?.abilities ?? [];
   const isDoubleShock =
     agentSlug === "sova" && ability === "Shock Dart" && doubleShock;
+
+  // Prefill map/side/agent when launched from a specific map + side view.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const m = p.get("map");
+    if (m && MAPS.some((x) => x.slug === m)) setMapSlug(m);
+    const s = p.get("side");
+    if (s === "Attack" || s === "Defense") setSide(s);
+    const a = p.get("agent");
+    if (a && getAgent(a)) setAgentSlug(a);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

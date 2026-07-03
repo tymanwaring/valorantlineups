@@ -6,6 +6,7 @@ import "./globals.css";
 import { adminAuthEnabled } from "@/lib/auth";
 import { canManage } from "@/lib/session";
 import LogoutButton from "./components/LogoutButton";
+import AddLineupButton from "./components/AddLineupButton";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -56,12 +57,7 @@ export default async function RootLayout({
                 </Link>
               )}
               {manage && (
-                <Link
-                  href="/admin"
-                  className="rounded bg-accent px-3 py-1.5 text-white hover:opacity-90 transition"
-                >
-                  + Add Lineup
-                </Link>
+                <AddLineupButton className="rounded bg-accent px-3 py-1.5 text-white hover:opacity-90 transition" />
               )}
               {loggedIn && <LogoutButton />}
             </nav>
