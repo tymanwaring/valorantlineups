@@ -66,19 +66,31 @@ export default function MapClient({
     [side, lineups],
   );
 
+  // Lineups for the current side AND site filter — drives both the agent chips
+  // and the grid, so agents with no lineups on the chosen site drop out.
+  const siteLineups = useMemo(
+    () => sideLineups.filter((l) => matchesSite(l.site, siteFilter)),
+    [sideLineups, siteFilter],
+  );
+
   const agentsWithLineups = useMemo(() => {
-    const set = new Set(sideLineups.map((l) => l.agentSlug));
+    const set = new Set(siteLineups.map((l) => l.agentSlug));
     return AGENTS.filter((a) => set.has(a.slug));
-  }, [sideLineups]);
+  }, [siteLineups]);
+
+  // If the selected agent no longer has lineups for this site, fall back to All.
+  useEffect(() => {
+    if (agent !== "all" && !agentsWithLineups.some((a) => a.slug === agent)) {
+      setAgent("all");
+    }
+  }, [agent, agentsWithLineups]);
 
   const filtered = useMemo(
     () =>
-      sideLineups.filter(
-        (l) =>
-          (agent === "all" || l.agentSlug === agent) &&
-          matchesSite(l.site, siteFilter),
-      ),
-    [agent, siteFilter, sideLineups],
+      agent === "all"
+        ? siteLineups
+        : siteLineups.filter((l) => l.agentSlug === agent),
+    [agent, siteLineups],
   );
 
   return (
@@ -160,50 +172,50 @@ export default function MapClient({
             </div>
 
             <div className="mb-6 flex flex-wrap items-center gap-2">
-        <FilterChip
-          label="All"
-          active={agent === "all"}
-          onClick={() => setAgent("all")}
-        />
-        {agentsWithLineups.map((a) => (
-          <FilterChip
-            key={a.slug}
-            label={a.name}
-            active={agent === a.slug}
-            onClick={() => setAgent(a.slug)}
-          />
-        ))}
-      </div>
+              <FilterChip
+                label="All"
+                active={agent === "all"}
+                onClick={() => setAgent("all")}
+              />
+              {agentsWithLineups.map((a) => (
+                <FilterChip
+                  key={a.slug}
+                  label={a.name}
+                  active={agent === a.slug}
+                  onClick={() => setAgent(a.slug)}
+                />
+              ))}
+            </div>
 
-      {filtered.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-panel-border p-10 text-center">
-          <p className="text-foreground/60">
-            No {side} lineups yet for {mapName}
-            {siteFilter !== "all"
-              ? ` on ${SITE_FILTERS.find((s) => s.id === siteFilter)?.label}`
-              : ""}
-            {agent !== "all" ? ` (${getAgent(agent)?.name})` : ""}.
-          </p>
-          <Link
-            href="/admin"
-            className="mt-4 inline-block rounded bg-accent px-4 py-2 text-sm font-semibold text-white"
-          >
-            + Add the first lineup
-          </Link>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filtered.map((l) => (
-            <LineupCard
-              key={l.id}
-              lineup={l}
-              onOpen={() => setViewing(l)}
-              onEdit={() => setEditing(l)}
-              onDelete={() => setDeleting(l)}
-            />
-          ))}
-        </div>
-      )}
+            {filtered.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-panel-border p-10 text-center">
+                <p className="text-foreground/60">
+                  No {side} lineups yet for {mapName}
+                  {siteFilter !== "all"
+                    ? ` on ${SITE_FILTERS.find((s) => s.id === siteFilter)?.label}`
+                    : ""}
+                  {agent !== "all" ? ` (${getAgent(agent)?.name})` : ""}.
+                </p>
+                <Link
+                  href="/admin"
+                  className="mt-4 inline-block rounded bg-accent px-4 py-2 text-sm font-semibold text-white"
+                >
+                  + Add the first lineup
+                </Link>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {filtered.map((l) => (
+                  <LineupCard
+                    key={l.id}
+                    lineup={l}
+                    onOpen={() => setViewing(l)}
+                    onEdit={() => setEditing(l)}
+                    onDelete={() => setDeleting(l)}
+                  />
+                ))}
+              </div>
+            )}
 
             {viewing && (
               <LineupModal lineup={viewing} onClose={() => setViewing(null)} />
