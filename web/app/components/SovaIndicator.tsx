@@ -8,12 +8,14 @@ const FILLED = "#38e0c8"; // Sova-ish teal
 export function SovaIndicator({
   charge,
   bounces,
+  jump,
   ability,
   title,
   variant = "badge",
 }: {
   charge?: number;
   bounces?: number;
+  jump?: boolean;
   ability?: string;
   /** Overrides the ability heading in the full panel (e.g. "First Dart"). */
   title?: string;
@@ -26,6 +28,7 @@ export function SovaIndicator({
   if (
     c === 0 &&
     (bounces == null || Number.isNaN(bounces)) &&
+    !jump &&
     !heading
   )
     return null;
@@ -34,7 +37,10 @@ export function SovaIndicator({
     return (
       <span className="flex w-full flex-col items-center gap-2">
         <WideChargeBar filled={c} />
-        <Diamonds filled={b} big />
+        <span className="flex items-center gap-2">
+          <Diamonds filled={b} big />
+          {jump && <JumpTag />}
+        </span>
       </span>
     );
   }
@@ -58,6 +64,7 @@ export function SovaIndicator({
         <span className="text-[10px] font-semibold tracking-widest text-foreground/50">
           {b} BOUNCE{b === 1 ? "" : "S"}
         </span>
+        {jump && <JumpTag />}
       </div>
     );
   }
@@ -65,7 +72,23 @@ export function SovaIndicator({
   return (
     <span className="inline-flex flex-col items-center gap-1 rounded bg-black/70 px-2 py-1">
       <ChargeBar filled={c} />
-      <Diamonds filled={b} />
+      <span className="flex items-center gap-1">
+        <Diamonds filled={b} />
+        {jump && <JumpTag small />}
+      </span>
+    </span>
+  );
+}
+
+function JumpTag({ small }: { small?: boolean }) {
+  return (
+    <span
+      className={`rounded font-bold uppercase tracking-widest text-black ${
+        small ? "px-1 text-[8px]" : "px-1.5 py-0.5 text-[9px]"
+      }`}
+      style={{ background: FILLED }}
+    >
+      Jump
     </span>
   );
 }

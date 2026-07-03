@@ -7,6 +7,7 @@ import { MAPS } from "@/lib/maps";
 import { AGENTS, getAgent } from "@/lib/agents";
 import StepsEditor from "@/app/components/StepsEditor";
 import SovaFields from "@/app/components/SovaFields";
+import JumpCheckbox from "@/app/components/JumpCheckbox";
 import SiteFields from "@/app/components/SiteFields";
 
 export default function AdminPage() {
@@ -171,6 +172,8 @@ export default function AdminPage() {
           doubleShock={doubleShock}
           onDoubleShockChange={setDoubleShock}
         />
+
+        <JumpCheckbox show={!!agentSlug && agentSlug !== "sova"} />
 
         <Field label="Notes / instructions">
           <textarea

@@ -8,6 +8,7 @@ import { MAPS } from "@/lib/maps";
 import type { Lineup } from "@/lib/types";
 import StepsEditor from "@/app/components/StepsEditor";
 import SovaFields from "@/app/components/SovaFields";
+import JumpCheckbox from "@/app/components/JumpCheckbox";
 import SiteFields from "@/app/components/SiteFields";
 import { SovaIndicator } from "@/app/components/SovaIndicator";
 import StepCarousel from "@/app/components/StepCarousel";
@@ -41,6 +42,7 @@ function lineupHaystack(l: Lineup): string {
     getAgent(l.agentSlug)?.name,
     l.agentSlug,
     l.doubleShock ? "double shock" : undefined,
+    l.jump || l.jump2 ? "jump" : undefined,
     ...(l.steps?.map((s) => s.caption) ?? []),
   ];
   return parts.filter(Boolean).join(" ").toLowerCase();
@@ -719,10 +721,20 @@ function LineupCard({
                 Double Shock
               </span>
             )}
+            {lineup.jump && lineup.agentSlug !== "sova" && (
+              <span className="rounded bg-accent/80 px-2 py-0.5 text-xs font-semibold text-white">
+                Jump
+              </span>
+            )}
           </div>
-          {lineup.agentSlug === "sova" && lineup.charge != null && (
-            <SovaIndicator charge={lineup.charge} bounces={lineup.bounces} />
-          )}
+          {lineup.agentSlug === "sova" &&
+            (lineup.charge != null || lineup.jump) && (
+              <SovaIndicator
+                charge={lineup.charge}
+                bounces={lineup.bounces}
+                jump={lineup.jump}
+              />
+            )}
         </div>
       </div>
 
@@ -811,25 +823,33 @@ function LineupModal({
                 title="First Dart"
                 charge={lineup.charge}
                 bounces={lineup.bounces}
+                jump={lineup.jump}
                 variant="full"
               />
               <SovaIndicator
                 title="Second Dart"
                 charge={lineup.charge2}
                 bounces={lineup.bounces2}
+                jump={lineup.jump2}
                 variant="full"
               />
             </div>
           ) : (
-            (lineup.charge != null || lineup.ability) && (
+            (lineup.charge != null || lineup.jump || lineup.ability) && (
               <SovaIndicator
                 ability={lineup.ability}
                 charge={lineup.charge}
                 bounces={lineup.bounces}
+                jump={lineup.jump}
                 variant="full"
               />
             )
           ))}
+        {lineup.jump && lineup.agentSlug !== "sova" && (
+          <span className="inline-block rounded bg-accent/80 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
+            Jump throw
+          </span>
+        )}
         {lineup.notes && (
           <p className="text-foreground/80 whitespace-pre-line">
             {lineup.notes}
@@ -1071,11 +1091,18 @@ function EditLineupModal({
             show={agentSlug === "sova"}
             defaultCharge={lineup.charge}
             defaultBounces={lineup.bounces}
+            defaultJump={lineup.jump}
             defaultCharge2={lineup.charge2}
             defaultBounces2={lineup.bounces2}
+            defaultJump2={lineup.jump2}
             showDoubleShock={ability === "Shock Dart"}
             doubleShock={doubleShock}
             onDoubleShockChange={setDoubleShock}
+          />
+
+          <JumpCheckbox
+            show={!!agentSlug && agentSlug !== "sova"}
+            defaultChecked={!!lineup.jump}
           />
 
           <Field label="Notes / instructions">

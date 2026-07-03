@@ -84,6 +84,8 @@ export async function PATCH(
     patch.charge = undefined;
     patch.bounces = undefined;
   }
+  // Jump applies to any agent (Sova via dart panel, others via checkbox).
+  patch.jump = parseBool(form.get("jump")) || undefined;
 
   // Double Shock only applies to Sova Shock Dart lineups.
   const doubleShock =
@@ -94,6 +96,7 @@ export async function PATCH(
   // Second dart values only apply to double-shock lineups.
   patch.charge2 = doubleShock ? parseIntField(form.get("charge2"), 0, 3) : undefined;
   patch.bounces2 = doubleShock ? parseIntField(form.get("bounces2"), 0, 2) : undefined;
+  patch.jump2 = doubleShock ? parseBool(form.get("jump2")) || undefined : undefined;
 
   // Rebuild steps when the form includes them; clean up images no longer used.
   if (form.has("step-0-caption") || form.has("steps-present")) {

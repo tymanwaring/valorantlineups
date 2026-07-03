@@ -20,12 +20,16 @@ export type Lineup = {
   charge?: number;
   /** Sova Recon/Shock Dart bounce count (0-2). First dart when double-shock. */
   bounces?: number;
+  /** Whether the (first/only) dart requires a jump throw. */
+  jump?: boolean;
   /** Sova Shock Dart double-shock (two darts) lineup. */
   doubleShock?: boolean;
   /** Second dart charge level (double-shock only). */
   charge2?: number;
   /** Second dart bounce count (double-shock only). */
   bounces2?: number;
+  /** Whether the second dart requires a jump throw (double-shock only). */
+  jump2?: boolean;
   createdAt: string;
 
   /** @deprecated use steps[]; kept so legacy records still typecheck */

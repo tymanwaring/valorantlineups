@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
   }
   const charge = parseIntField(form.get("charge"), 0, 3);
   const bounces = parseIntField(form.get("bounces"), 0, 2);
+  const jump = parseBool(form.get("jump"));
   const isShockDart = agentSlug === "sova" && ability === "Shock Dart";
   const doubleShock = isShockDart && parseBool(form.get("doubleShock"));
 
@@ -75,10 +76,12 @@ export async function POST(req: NextRequest) {
     steps,
     charge: agentSlug === "sova" ? charge : undefined,
     bounces: agentSlug === "sova" ? bounces : undefined,
+    jump: jump || undefined,
     doubleShock: doubleShock || undefined,
     // Second dart values only apply to double-shock lineups.
     charge2: doubleShock ? parseIntField(form.get("charge2"), 0, 3) : undefined,
     bounces2: doubleShock ? parseIntField(form.get("bounces2"), 0, 2) : undefined,
+    jump2: doubleShock ? parseBool(form.get("jump2")) || undefined : undefined,
     notes: notes || undefined,
   };
 
