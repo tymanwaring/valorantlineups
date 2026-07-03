@@ -17,8 +17,12 @@ export default function AdminPage() {
   const [message, setMessage] = useState("");
   const [agentSlug, setAgentSlug] = useState("");
   const [mapSlug, setMapSlug] = useState("");
+  const [ability, setAbility] = useState("");
+  const [doubleShock, setDoubleShock] = useState(false);
   const [side, setSide] = useState<"Attack" | "Defense">("Attack");
   const abilities = getAgent(agentSlug)?.abilities ?? [];
+  const isDoubleShock =
+    agentSlug === "sova" && ability === "Shock Dart" && doubleShock;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -37,6 +41,8 @@ export default function AdminPage() {
       form.reset();
       setAgentSlug("");
       setMapSlug("");
+      setAbility("");
+      setDoubleShock(false);
       setSide("Attack");
       router.refresh();
     } catch (err) {
@@ -62,7 +68,7 @@ export default function AdminPage() {
             <select
               name="mapSlug"
               required
-              className={selectClass}
+              className={mutedIf(!mapSlug)}
               value={mapSlug}
               onChange={(e) => setMapSlug(e.target.value)}
             >
@@ -80,9 +86,13 @@ export default function AdminPage() {
             <select
               name="agentSlug"
               required
-              className={selectClass}
+              className={mutedIf(!agentSlug)}
               value={agentSlug}
-              onChange={(e) => setAgentSlug(e.target.value)}
+              onChange={(e) => {
+                setAgentSlug(e.target.value);
+                setAbility("");
+                setDoubleShock(false);
+              }}
             >
               <option value="" disabled>
                 Select an agent
@@ -109,10 +119,13 @@ export default function AdminPage() {
           <Field label="Ability">
             <select
               name="ability"
-              className={selectClass}
-              defaultValue=""
+              className={mutedIf(!ability)}
+              value={ability}
+              onChange={(e) => {
+                setAbility(e.target.value);
+                setDoubleShock(false);
+              }}
               disabled={!agentSlug}
-              key={agentSlug}
             >
               <option value="" disabled>
                 {agentSlug ? "Select an ability" : "Select an agent first"}
@@ -141,7 +154,12 @@ export default function AdminPage() {
 
         <SiteFields mapSlug={mapSlug} side={side} />
 
-        <SovaFields show={agentSlug === "sova"} />
+        <SovaFields
+          show={agentSlug === "sova"}
+          showDoubleShock={ability === "Shock Dart"}
+          doubleShock={doubleShock}
+          onDoubleShockChange={setDoubleShock}
+        />
 
         <Field label="Notes / instructions">
           <textarea
@@ -152,7 +170,7 @@ export default function AdminPage() {
           />
         </Field>
 
-        <StepsEditor />
+        <StepsEditor doubleShock={isDoubleShock} />
 
         <div className="flex items-center gap-4 pt-2">
           <button
@@ -180,6 +198,10 @@ export default function AdminPage() {
 const inputClass =
   "w-full rounded-md border border-panel-border bg-background px-3 py-2 outline-none focus:border-accent";
 const selectClass = inputClass;
+
+// Grey the select text like a placeholder while no value is chosen.
+const mutedIf = (empty: boolean) =>
+  `${selectClass}${empty ? " text-foreground/40" : ""}`;
 
 function Field({
   label,

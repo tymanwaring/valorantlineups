@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getLineup, updateLineup, deleteLineup } from "@/lib/store";
 import { getMap } from "@/lib/maps";
 import { getAgent } from "@/lib/agents";
-import { deleteUpload } from "@/lib/uploads";
+import { deleteUpload, UploadError } from "@/lib/uploads";
 import { parseStepsFromForm, collectStepImages } from "@/lib/steps-form";
 import type { Lineup } from "@/lib/types";
 
@@ -15,6 +15,10 @@ function parseIntField(
   const n = Number(value);
   if (!Number.isFinite(n)) return undefined;
   return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+function parseBool(value: FormDataEntryValue | null): boolean {
+  return value === "on" || value === "true" || value === "1";
 }
 
 export async function PATCH(
@@ -72,6 +76,7 @@ export async function PATCH(
 
   // Sova charge/bounces: only meaningful for Sova, cleared otherwise.
   const effectiveAgent = patch.agentSlug ?? existing.agentSlug;
+  const effectiveAbility = patch.ability ?? existing.ability;
   if (effectiveAgent === "sova") {
     patch.charge = parseIntField(form.get("charge"), 0, 3);
     patch.bounces = parseIntField(form.get("bounces"), 0, 2);
@@ -80,9 +85,23 @@ export async function PATCH(
     patch.bounces = undefined;
   }
 
+  // Double Shock only applies to Sova Shock Dart lineups.
+  patch.doubleShock =
+    effectiveAgent === "sova" && effectiveAbility === "Shock Dart"
+      ? parseBool(form.get("doubleShock")) || undefined
+      : undefined;
+
   // Rebuild steps when the form includes them; clean up images no longer used.
   if (form.has("step-0-caption") || form.has("steps-present")) {
-    const newSteps = await parseStepsFromForm(form);
+    let newSteps;
+    try {
+      newSteps = await parseStepsFromForm(form);
+    } catch (e) {
+      if (e instanceof UploadError) {
+        return NextResponse.json({ error: e.message }, { status: 400 });
+      }
+      throw e;
+    }
     patch.steps = newSteps;
 
     const oldImages = new Set([

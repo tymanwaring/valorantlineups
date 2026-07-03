@@ -44,6 +44,7 @@ export default function MapClient({
   const [switching, setSwitching] = useState(false);
   const [agent, setAgent] = useState<string>("all");
   const [siteFilter, setSiteFilter] = useState<string>("all");
+  const [doubleShockOnly, setDoubleShockOnly] = useState(false);
   const [viewing, setViewing] = useState<Lineup | null>(null);
   const [editing, setEditing] = useState<Lineup | null>(null);
   const [deleting, setDeleting] = useState<Lineup | null>(null);
@@ -57,6 +58,7 @@ export default function MapClient({
       setSide(other);
       setAgent("all");
       setSiteFilter("all");
+      setDoubleShockOnly(false);
     }, 440);
     window.setTimeout(() => setSwitching(false), 1000);
   }
@@ -87,13 +89,24 @@ export default function MapClient({
     }
   }, [agent, agentsWithLineups]);
 
-  const filtered = useMemo(
-    () =>
+  const hasDoubleShock = useMemo(
+    () => siteLineups.some((l) => l.doubleShock),
+    [siteLineups],
+  );
+
+  // Drop the Double Shock filter if the current view has none.
+  useEffect(() => {
+    if (doubleShockOnly && !hasDoubleShock) setDoubleShockOnly(false);
+  }, [doubleShockOnly, hasDoubleShock]);
+
+  const filtered = useMemo(() => {
+    let out =
       agent === "all"
         ? siteLineups
-        : siteLineups.filter((l) => l.agentSlug === agent),
-    [agent, siteLineups],
-  );
+        : siteLineups.filter((l) => l.agentSlug === agent);
+    if (doubleShockOnly) out = out.filter((l) => l.doubleShock);
+    return out;
+  }, [agent, siteLineups, doubleShockOnly]);
 
   return (
     <div
@@ -151,6 +164,7 @@ export default function MapClient({
               setSide(s);
               setAgent("all");
               setSiteFilter("all");
+              setDoubleShockOnly(false);
             }}
           />
         ) : (
@@ -187,6 +201,16 @@ export default function MapClient({
                   onClick={() => setAgent(a.slug)}
                 />
               ))}
+              {hasDoubleShock && (
+                <>
+                  <span className="mx-1 h-5 w-px self-center bg-panel-border" />
+                  <FilterChip
+                    label="Double Shock"
+                    active={doubleShockOnly}
+                    onClick={() => setDoubleShockOnly((v) => !v)}
+                  />
+                </>
+              )}
             </div>
 
             {filtered.length === 0 ? (
@@ -323,16 +347,13 @@ function SideSelect({
         </div>
       </button>
 
-      {/* Diagonal glowing slash */}
-      <div className="side-slash" />
-
       {/* Vignette + prompt */}
       <div className="pointer-events-none absolute inset-0 z-[6] shadow-[inset_0_0_140px_60px_rgba(0,0,0,0.7)]" />
       <div className="pointer-events-none absolute inset-x-0 top-5 z-[7] text-center">
-        <p className="font-display text-lg tracking-[0.35em] text-white/80">
+        <p className="font-display text-lg tracking-[0.35em] text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)]">
           {mapName.toUpperCase()}
         </p>
-        <p className="mt-1 text-xs uppercase tracking-[0.3em] text-white/40">
+        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.3em] text-white/80 drop-shadow-[0_1px_8px_rgba(0,0,0,0.95)]">
           Choose your side
         </p>
       </div>
@@ -519,6 +540,11 @@ function LineupCard({
                 {lineup.plantSpot}
               </span>
             )}
+            {lineup.doubleShock && (
+              <span className="rounded bg-accent/80 px-2 py-0.5 text-xs font-semibold text-white">
+                Double Shock
+              </span>
+            )}
           </div>
           {lineup.agentSlug === "sova" && lineup.charge != null && (
             <SovaIndicator charge={lineup.charge} bounces={lineup.bounces} />
@@ -604,13 +630,16 @@ function LineupModal({
         </button>
       </div>
       <div className="p-5 space-y-5">
-        {lineup.agentSlug === "sova" && lineup.charge != null && (
-          <SovaIndicator
-            charge={lineup.charge}
-            bounces={lineup.bounces}
-            variant="full"
-          />
-        )}
+        {lineup.agentSlug === "sova" &&
+          (lineup.charge != null || lineup.doubleShock || lineup.ability) && (
+            <SovaIndicator
+              charge={lineup.charge}
+              bounces={lineup.bounces}
+              doubleShock={lineup.doubleShock}
+              ability={lineup.ability}
+              variant="full"
+            />
+          )}
         {lineup.notes && (
           <p className="text-foreground/80 whitespace-pre-line">
             {lineup.notes}
@@ -720,6 +749,15 @@ function EditLineupModal({
   const abilityDefault = abilities.includes(lineup.ability)
     ? lineup.ability
     : "";
+  const [ability, setAbility] = useState(abilityDefault);
+  const [doubleShock, setDoubleShock] = useState(!!lineup.doubleShock);
+  // Drop the selected ability if it isn't valid for a newly chosen agent.
+  useEffect(() => {
+    setAbility((prev) => (abilities.includes(prev) ? prev : ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentSlug]);
+  const isDoubleShock =
+    agentSlug === "sova" && ability === "Shock Dart" && doubleShock;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -802,10 +840,10 @@ function EditLineupModal({
             <Field label="Ability">
               <select
                 name="ability"
-                key={agentSlug}
-                defaultValue={abilityDefault}
+                value={ability}
+                onChange={(e) => setAbility(e.target.value)}
                 disabled={!agentSlug}
-                className={inputClass}
+                className={`${inputClass}${ability ? "" : " text-foreground/40"}`}
               >
                 <option value="">
                   {agentSlug ? "Select an ability" : "Select an agent first"}
@@ -843,6 +881,9 @@ function EditLineupModal({
             show={agentSlug === "sova"}
             defaultCharge={lineup.charge}
             defaultBounces={lineup.bounces}
+            showDoubleShock={ability === "Shock Dart"}
+            doubleShock={doubleShock}
+            onDoubleShockChange={setDoubleShock}
           />
 
           <Field label="Notes / instructions">
@@ -854,7 +895,7 @@ function EditLineupModal({
             />
           </Field>
 
-          <StepsEditor initialSteps={lineup.steps} />
+          <StepsEditor initialSteps={lineup.steps} doubleShock={isDoubleShock} />
 
           {error && <p className="text-sm text-accent">{error}</p>}
         </div>

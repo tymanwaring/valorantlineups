@@ -11,7 +11,7 @@ export const AGENTS: AgentInfo[] = [
     slug: "sova",
     name: "Sova",
     role: "Initiator",
-    abilities: ["Recon Bolt", "Shock Bolt", "Owl Drone", "Hunter's Fury"],
+    abilities: ["Recon Bolt", "Shock Dart", "Owl Drone", "Hunter's Fury"],
   },
   {
     slug: "viper",

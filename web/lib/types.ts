@@ -16,10 +16,12 @@ export type Lineup = {
   plantSpot?: string;
   steps: LineupStep[];
   notes?: string;
-  /** Sova Recon/Shock Bolt charge level (1-3 bars). */
+  /** Sova Recon/Shock Dart charge level (1-3 bars). */
   charge?: number;
-  /** Sova Recon/Shock Bolt bounce count (0-2). */
+  /** Sova Recon/Shock Dart bounce count (0-2). */
   bounces?: number;
+  /** Sova Shock Dart double-shock (two darts) lineup. */
+  doubleShock?: boolean;
   createdAt: string;
 
   /** @deprecated use steps[]; kept so legacy records still typecheck */
@@ -33,6 +35,15 @@ export type Lineup = {
 export type NewLineup = Omit<Lineup, "id" | "createdAt">;
 
 export const DEFAULT_STEP_CAPTIONS = ["Stand here", "Aim here", "Result"];
+
+/** Steps for a Sova double-shock lineup, distinguishing the two darts. */
+export const DOUBLE_SHOCK_STEP_CAPTIONS = [
+  "First dart — Stand",
+  "First dart — Aim",
+  "Second dart — Stand",
+  "Second dart — Aim",
+  "Result",
+];
 
 type Legacyish = {
   steps?: unknown;

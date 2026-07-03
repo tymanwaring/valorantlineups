@@ -1,21 +1,31 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent } from "react";
 import type { LineupStep } from "@/lib/types";
-import { DEFAULT_STEP_CAPTIONS } from "@/lib/types";
+import {
+  DEFAULT_STEP_CAPTIONS,
+  DOUBLE_SHOCK_STEP_CAPTIONS,
+} from "@/lib/types";
+import {
+  compressImage,
+  readClipboardImage,
+  setInputFile,
+} from "@/lib/image-client";
 
 type Row = {
   id: number;
   caption: string;
   existingImage?: string;
   previewUrl?: string;
+  fileName?: string;
 };
 
 let counter = 0;
 const nextId = () => ++counter;
 
-function defaultRows(): Row[] {
-  return DEFAULT_STEP_CAPTIONS.map((caption) => ({ id: nextId(), caption }));
+function defaultRows(doubleShock?: boolean): Row[] {
+  const caps = doubleShock ? DOUBLE_SHOCK_STEP_CAPTIONS : DEFAULT_STEP_CAPTIONS;
+  return caps.map((caption) => ({ id: nextId(), caption }));
 }
 
 function fromSteps(steps: LineupStep[]): Row[] {
@@ -29,25 +39,100 @@ function fromSteps(steps: LineupStep[]): Row[] {
 
 export default function StepsEditor({
   initialSteps,
+  doubleShock = false,
 }: {
   initialSteps?: LineupStep[];
+  doubleShock?: boolean;
 }) {
   const [rows, setRows] = useState<Row[]>(() => fromSteps(initialSteps ?? []));
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [activeId, setActiveId] = useState<number | null>(null);
+  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [errorId, setErrorId] = useState<{ id: number; msg: string } | null>(
+    null,
+  );
+  // Once the user edits steps we stop auto-populating defaults. Editing an
+  // existing lineup counts as "touched" so we never clobber saved steps.
+  const [touched, setTouched] = useState(() => (initialSteps?.length ?? 0) > 0);
   const fileInputs = useRef<Record<number, HTMLInputElement | null>>({});
 
+  // Swap the default step scaffold when Double Shock toggles, unless the user
+  // has already customized the steps.
+  useEffect(() => {
+    if (!touched) setRows(defaultRows(doubleShock));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doubleShock]);
+
   function update(id: number, patch: Partial<Row>) {
+    setTouched(true);
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
 
+  /** Compress, load into the row's file input, and refresh its preview. */
+  async function applyImage(id: number, file: File) {
+    const input = fileInputs.current[id];
+    if (!input) return;
+    setBusyId(id);
+    setErrorId(null);
+    try {
+      const compressed = await compressImage(file);
+      setInputFile(input, compressed);
+      update(id, {
+        previewUrl: URL.createObjectURL(compressed),
+        existingImage: undefined,
+        fileName: compressed.name,
+      });
+    } catch {
+      setErrorId({ id, msg: "Could not process that image." });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function pasteFromClipboard(id: number) {
+    setBusyId(id);
+    setErrorId(null);
+    try {
+      const file = await readClipboardImage();
+      if (!file) {
+        setErrorId({ id, msg: "No image found on the clipboard." });
+        setBusyId(null);
+        return;
+      }
+      await applyImage(id, file);
+    } catch (e) {
+      setErrorId({
+        id,
+        msg: e instanceof Error ? e.message : "Clipboard read failed.",
+      });
+      setBusyId(null);
+    }
+  }
+
+  // Ctrl+V anywhere in the editor pastes into the active (red-bordered) step.
+  function onContainerPaste(e: ClipboardEvent) {
+    const file = Array.from(e.clipboardData?.items ?? [])
+      .find((it) => it.type.startsWith("image/"))
+      ?.getAsFile();
+    if (!file) return; // Let non-image pastes (text) behave normally.
+    const targetId = activeId ?? rows[0]?.id;
+    if (targetId == null) return;
+    e.preventDefault();
+    void applyImage(targetId, file);
+  }
+
   function addRow() {
+    setTouched(true);
     setRows((rs) => [...rs, { id: nextId(), caption: "" }]);
   }
 
   function removeRow(id: number) {
+    setTouched(true);
     setRows((rs) => rs.filter((r) => r.id !== id));
   }
 
   function move(index: number, dir: -1 | 1) {
+    setTouched(true);
     setRows((rs) => {
       const next = [...rs];
       const target = index + dir;
@@ -59,17 +144,21 @@ export default function StepsEditor({
 
   function onPickFile(id: number, input: HTMLInputElement) {
     const file = input.files?.[0];
-    update(id, { previewUrl: file ? URL.createObjectURL(file) : undefined });
+    if (file) {
+      void applyImage(id, file);
+    } else {
+      update(id, { previewUrl: undefined });
+    }
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" onPaste={onContainerPaste}>
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-foreground/80">
           Steps ({rows.length})
         </span>
         <span className="text-xs text-foreground/40">
-          Add a screenshot + caption for each step
+          Click a step, then Ctrl+V to paste
         </span>
       </div>
 
@@ -81,7 +170,13 @@ export default function StepsEditor({
         return (
           <div
             key={row.id}
-            className="rounded-lg border border-panel-border bg-background/40 p-3"
+            onMouseDown={() => setActiveId(row.id)}
+            onFocusCapture={() => setActiveId(row.id)}
+            className={`rounded-lg border bg-background/40 p-3 transition-colors ${
+              activeId === row.id
+                ? "border-accent ring-1 ring-accent/40"
+                : "border-panel-border"
+            }`}
           >
             <div className="flex items-start gap-3">
               <div className="flex flex-col gap-1 pt-1">
@@ -133,16 +228,50 @@ export default function StepsEditor({
                   })`}
                   className="w-full rounded-md border border-panel-border bg-background px-3 py-1.5 text-sm outline-none focus:border-accent"
                 />
-                <input
-                  ref={(el) => {
-                    fileInputs.current[row.id] = el;
-                  }}
-                  type="file"
-                  name={`step-${i}-image`}
-                  accept="image/*"
-                  onChange={(e) => onPickFile(row.id, e.currentTarget)}
-                  className="w-full text-xs text-foreground/70 file:mr-3 file:rounded file:border-0 file:bg-panel-border file:px-2 file:py-1 file:text-foreground"
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={(el) => {
+                      fileInputs.current[row.id] = el;
+                    }}
+                    type="file"
+                    name={`step-${i}-image`}
+                    accept="image/*"
+                    onChange={(e) => onPickFile(row.id, e.currentTarget)}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputs.current[row.id]?.click()}
+                    className="shrink-0 rounded border border-panel-border px-2 py-1 text-xs text-foreground/80 hover:border-accent/60 hover:text-accent"
+                  >
+                    Choose file
+                  </button>
+                  <span className="min-w-0 flex-1 truncate text-xs text-foreground/50">
+                    {row.fileName ??
+                      (row.existingImage ? "Current image" : "No file chosen")}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => pasteFromClipboard(row.id)}
+                    disabled={busyId === row.id}
+                    title="Paste an image copied to your clipboard"
+                    className="shrink-0 rounded border border-panel-border px-2 py-1 text-xs text-foreground/80 hover:border-accent/60 hover:text-accent disabled:opacity-50"
+                  >
+                    {busyId === row.id ? "…" : "Paste"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => thumb && setLightbox(thumb)}
+                    disabled={!thumb}
+                    title="Preview image full size"
+                    className="shrink-0 rounded border border-panel-border px-2 py-1 text-xs text-foreground/80 hover:border-accent/60 hover:text-accent disabled:opacity-40"
+                  >
+                    Preview
+                  </button>
+                </div>
+                {errorId?.id === row.id && (
+                  <p className="text-xs text-accent">{errorId.msg}</p>
+                )}
                 {row.existingImage && (
                   <input
                     type="hidden"
@@ -172,6 +301,29 @@ export default function StepsEditor({
       >
         + Add step
       </button>
+
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-4"
+          onClick={() => setLightbox(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightbox}
+            alt="Step preview"
+            className="max-h-[92vh] max-w-[92vw] rounded-lg border border-panel-border object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            type="button"
+            onClick={() => setLightbox(null)}
+            aria-label="Close preview"
+            className="absolute right-4 top-4 rounded-full bg-black/60 px-3 py-1 text-lg leading-none text-white hover:bg-black/80"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 }

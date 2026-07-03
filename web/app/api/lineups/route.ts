@@ -4,6 +4,7 @@ import type { NewLineup } from "@/lib/types";
 import { getMap } from "@/lib/maps";
 import { getAgent } from "@/lib/agents";
 import { parseStepsFromForm } from "@/lib/steps-form";
+import { UploadError } from "@/lib/uploads";
 
 export async function GET() {
   const lineups = await getLineups();
@@ -19,6 +20,10 @@ function parseIntField(
   const n = Number(value);
   if (!Number.isFinite(n)) return undefined;
   return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+function parseBool(value: FormDataEntryValue | null): boolean {
+  return value === "on" || value === "true" || value === "1";
 }
 
 export async function POST(req: NextRequest) {
@@ -44,9 +49,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Title is required" }, { status: 400 });
   }
 
-  const steps = await parseStepsFromForm(form);
+  let steps;
+  try {
+    steps = await parseStepsFromForm(form);
+  } catch (e) {
+    if (e instanceof UploadError) {
+      return NextResponse.json({ error: e.message }, { status: 400 });
+    }
+    throw e;
+  }
   const charge = parseIntField(form.get("charge"), 0, 3);
   const bounces = parseIntField(form.get("bounces"), 0, 2);
+  const isShockDart = agentSlug === "sova" && ability === "Shock Dart";
+  const doubleShock = isShockDart && parseBool(form.get("doubleShock"));
 
   const data: NewLineup = {
     mapSlug,
@@ -60,6 +75,7 @@ export async function POST(req: NextRequest) {
     steps,
     charge: agentSlug === "sova" ? charge : undefined,
     bounces: agentSlug === "sova" ? bounces : undefined,
+    doubleShock: doubleShock || undefined,
     notes: notes || undefined,
   };
 

@@ -44,7 +44,7 @@ export default function SiteFields({
           defaultValue={defaultSite ?? ""}
           className={inputClass}
         >
-          <option value="">Any / N/A</option>
+          <option value="">N/A</option>
           {sites.map((s) => (
             <option key={s} value={s}>
               {s === "Mid" ? "Mid" : `${s} Site`}

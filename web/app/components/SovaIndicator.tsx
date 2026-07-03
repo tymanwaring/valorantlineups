@@ -1,4 +1,4 @@
-// Sova Recon/Shock Bolt HUD-style indicator: a 3-segment charge bar with the
+// Sova Recon/Shock Dart HUD-style indicator: a 3-segment charge bar with the
 // bounce diamonds (0-2) underneath. Purely presentational.
 
 const CHARGE_MAX = 3;
@@ -8,16 +8,26 @@ const FILLED = "#38e0c8"; // Sova-ish teal
 export function SovaIndicator({
   charge,
   bounces,
+  doubleShock,
+  ability,
   variant = "badge",
 }: {
   charge?: number;
   bounces?: number;
+  doubleShock?: boolean;
+  ability?: string;
   variant?: "badge" | "full" | "wide";
 }) {
   const c = clamp(charge, 0, CHARGE_MAX);
   const b = clamp(bounces, 0, BOUNCE_MAX);
-  // Nothing worth showing.
-  if (c === 0 && (bounces == null || Number.isNaN(bounces))) return null;
+  // Nothing worth showing (the ability label alone is enough for the panel).
+  if (
+    c === 0 &&
+    (bounces == null || Number.isNaN(bounces)) &&
+    !doubleShock &&
+    !ability
+  )
+    return null;
 
   if (variant === "wide") {
     return (
@@ -31,6 +41,14 @@ export function SovaIndicator({
   if (variant === "full") {
     return (
       <div className="inline-flex flex-col items-center gap-2 rounded-lg border border-panel-border bg-black/40 px-5 py-3">
+        {ability && (
+          <span
+            className="text-[11px] font-bold uppercase tracking-widest"
+            style={{ color: FILLED }}
+          >
+            {ability}
+          </span>
+        )}
         <span className="text-[10px] font-semibold tracking-widest text-foreground/50">
           CHARGE
         </span>
@@ -39,6 +57,15 @@ export function SovaIndicator({
         <span className="text-[10px] font-semibold tracking-widest text-foreground/50">
           {b} BOUNCE{b === 1 ? "" : "S"}
         </span>
+        {doubleShock && (
+          <>
+            <span className="my-0.5 h-px w-10 bg-panel-border" />
+            <TwoDarts />
+            <span className="text-[10px] font-semibold tracking-widest text-foreground/50">
+              DOUBLE SHOCK
+            </span>
+          </>
+        )}
       </div>
     );
   }
@@ -93,6 +120,26 @@ function ChargeBar({ filled, big }: { filled: number; big?: boolean }) {
           />
         );
       })}
+    </span>
+  );
+}
+
+function TwoDarts() {
+  return (
+    <span className="flex items-center" style={{ gap: 6 }}>
+      {[0, 1].map((i) => (
+        <span
+          key={i}
+          style={{
+            width: 0,
+            height: 0,
+            borderLeft: "5px solid transparent",
+            borderRight: "5px solid transparent",
+            borderBottom: `12px solid ${FILLED}`,
+            filter: `drop-shadow(0 0 5px ${FILLED}88)`,
+          }}
+        />
+      ))}
     </span>
   );
 }
