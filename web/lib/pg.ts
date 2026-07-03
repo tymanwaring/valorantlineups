@@ -32,7 +32,7 @@ const DEFAULT_ROTATION = [
 
 const SEED_LINEUPS: Lineup[] = [
   {
-    id: "seed-ascent-sova-a",
+    id: "a0000000-0000-4000-8000-000000000001",
     mapSlug: "ascent",
     agentSlug: "sova",
     title: "A Site Recon Dart from Spawn",
@@ -44,7 +44,7 @@ const SEED_LINEUPS: Lineup[] = [
     createdAt: "2026-07-03T00:00:00.000Z",
   },
   {
-    id: "seed-ascent-viper-mid",
+    id: "a0000000-0000-4000-8000-000000000002",
     mapSlug: "ascent",
     agentSlug: "viper",
     title: "Mid Wall from Attacker Side",
@@ -56,7 +56,7 @@ const SEED_LINEUPS: Lineup[] = [
     createdAt: "2026-07-03T00:00:01.000Z",
   },
   {
-    id: "seed-ascent-omen-def",
+    id: "a0000000-0000-4000-8000-000000000003",
     mapSlug: "ascent",
     agentSlug: "brimstone",
     title: "A Site Defensive Smoke",
@@ -68,7 +68,7 @@ const SEED_LINEUPS: Lineup[] = [
     createdAt: "2026-07-03T00:00:02.000Z",
   },
   {
-    id: "seed-bind-brim-a",
+    id: "a0000000-0000-4000-8000-000000000004",
     mapSlug: "bind",
     agentSlug: "brimstone",
     title: "A Site Post-Plant Smokes",

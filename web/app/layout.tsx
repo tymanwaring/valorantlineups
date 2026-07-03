@@ -23,7 +23,7 @@ const valorant = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "VALORANT Lineups",
+  title: "brimmybuddy",
   description: "Browse Valorant lineups by map and agent.",
 };
 
@@ -48,7 +48,7 @@ export default async function RootLayout({
         <header className="border-b border-panel-border bg-panel/60 backdrop-blur sticky top-0 z-20">
           <div className="mx-auto max-w-6xl px-4 h-16 flex items-center justify-between">
             <Link href="/" className="font-display text-2xl tracking-widest">
-              <span className="text-accent">VALORANT</span> LINEUPS
+              <span className="text-accent">brimmy</span>buddy
             </Link>
             <nav className="flex items-center gap-4 sm:gap-6 text-sm font-medium">
               <Link href="/" className="hover:text-accent transition-colors">
