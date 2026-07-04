@@ -5,6 +5,7 @@ import { getAgent } from "@/lib/agents";
 import { deleteUpload, UploadError } from "@/lib/uploads";
 import { parseStepsFromForm, collectStepImages } from "@/lib/steps-form";
 import type { Lineup } from "@/lib/types";
+import { PRECISION_LEVELS } from "@/lib/types";
 
 function parseIntField(
   value: FormDataEntryValue | null,
@@ -19,6 +20,27 @@ function parseIntField(
 
 function parseBool(value: FormDataEntryValue | null): boolean {
   return value === "on" || value === "true" || value === "1";
+}
+
+function parseCoord(value: FormDataEntryValue | null): number | undefined {
+  if (value == null || value === "") return undefined;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return undefined;
+  return Math.min(1, Math.max(0, n));
+}
+
+function parseSeconds(value: FormDataEntryValue | null): number | undefined {
+  if (value == null || value === "") return undefined;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return undefined;
+  return Math.round(Math.min(60, n) * 10) / 10;
+}
+
+function parsePrecision(value: FormDataEntryValue | null): string | undefined {
+  const v = String(value ?? "").trim();
+  return PRECISION_LEVELS.includes(v as (typeof PRECISION_LEVELS)[number])
+    ? v
+    : undefined;
 }
 
 export async function PATCH(
@@ -86,6 +108,16 @@ export async function PATCH(
   }
   // Jump applies to any agent (Sova via dart panel, others via checkbox).
   patch.jump = parseBool(form.get("jump")) || undefined;
+  // Crouch, time-to-land and precision apply to any agent.
+  if (form.has("crouch")) {
+    patch.crouch = parseBool(form.get("crouch")) || undefined;
+  }
+  if (form.has("timeToLand")) {
+    patch.timeToLand = parseSeconds(form.get("timeToLand"));
+  }
+  if (form.has("precision")) {
+    patch.precision = parsePrecision(form.get("precision"));
+  }
 
   // Double Shock only applies to Sova Shock Dart lineups.
   const doubleShock =
@@ -97,6 +129,12 @@ export async function PATCH(
   patch.charge2 = doubleShock ? parseIntField(form.get("charge2"), 0, 3) : undefined;
   patch.bounces2 = doubleShock ? parseIntField(form.get("bounces2"), 0, 2) : undefined;
   patch.jump2 = doubleShock ? parseBool(form.get("jump2")) || undefined : undefined;
+
+  // Minimap coordinates (normalized 0-1). Only touch when the form sends them.
+  if (form.has("fromX")) patch.fromX = parseCoord(form.get("fromX"));
+  if (form.has("fromY")) patch.fromY = parseCoord(form.get("fromY"));
+  if (form.has("toX")) patch.toX = parseCoord(form.get("toX"));
+  if (form.has("toY")) patch.toY = parseCoord(form.get("toY"));
 
   // Rebuild steps when the form includes them; clean up images no longer used.
   if (form.has("step-0-caption") || form.has("steps-present")) {

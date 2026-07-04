@@ -48,6 +48,12 @@ export default async function RootLayout({
               <Link href="/" className="hover:text-accent transition-colors">
                 Maps
               </Link>
+              <Link
+                href="/favorites"
+                className="hover:text-accent transition-colors"
+              >
+                Favorites
+              </Link>
               {manage && (
                 <Link
                   href="/admin/rotation"

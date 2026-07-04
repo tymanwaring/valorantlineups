@@ -7,8 +7,9 @@ import { MAPS } from "@/lib/maps";
 import { AGENTS, getAgent } from "@/lib/agents";
 import StepsEditor from "@/app/components/StepsEditor";
 import SovaFields from "@/app/components/SovaFields";
-import JumpCheckbox from "@/app/components/JumpCheckbox";
+import MechanicsFields from "@/app/components/MechanicsFields";
 import SiteFields from "@/app/components/SiteFields";
+import MinimapPicker from "@/app/components/MinimapPicker";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -173,7 +174,9 @@ export default function AdminPage() {
           onDoubleShockChange={setDoubleShock}
         />
 
-        <JumpCheckbox show={!!agentSlug && agentSlug !== "sova"} />
+        <MechanicsFields agentSlug={agentSlug} />
+
+        <MinimapPicker key={mapSlug} mapSlug={mapSlug} />
 
         <Field label="Notes / instructions">
           <textarea

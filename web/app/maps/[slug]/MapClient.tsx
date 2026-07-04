@@ -2,27 +2,42 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AGENTS, getAgent } from "@/lib/agents";
-import { MAPS } from "@/lib/maps";
+import { MAPS, getMapSites } from "@/lib/maps";
 import type { Lineup } from "@/lib/types";
+import { useFavorites } from "@/lib/favorites";
 import StepsEditor from "@/app/components/StepsEditor";
 import SovaFields from "@/app/components/SovaFields";
-import JumpCheckbox from "@/app/components/JumpCheckbox";
+import MechanicsFields from "@/app/components/MechanicsFields";
 import SiteFields from "@/app/components/SiteFields";
+import MinimapPicker from "@/app/components/MinimapPicker";
+import MinimapView from "./MinimapView";
+import LineupTags from "@/app/components/LineupTags";
+import FavoriteStar from "@/app/components/FavoriteStar";
 import { SovaIndicator } from "@/app/components/SovaIndicator";
 import StepCarousel from "@/app/components/StepCarousel";
+
+// Build a shareable deep link that opens a specific lineup on its map.
+export function lineupLink(l: Lineup): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  return `${origin}/maps/${l.mapSlug}?side=${l.side}&lineup=${l.id}`;
+}
 
 type Side = "Attack" | "Defense";
 type View = Side | "all";
 
-// Fixed site buckets shown as filter chips in the map header.
-const SITE_FILTERS: { id: string; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "A", label: "A Site" },
-  { id: "B", label: "B Site" },
-  { id: "Mid", label: "Mid" },
-];
+// Site filter chips shown in the map header, derived per-map so three-site
+// maps (Haven, Lotus) expose a "C Site" chip too.
+function siteFiltersFor(mapSlug: string): { id: string; label: string }[] {
+  return [
+    { id: "all", label: "All" },
+    ...getMapSites(mapSlug).map((s) => ({
+      id: s,
+      label: s === "Mid" ? "Mid" : `${s} Site`,
+    })),
+  ];
+}
 
 function matchesSite(site: string | undefined, filter: string): boolean {
   return filter === "all" || site === filter;
@@ -43,6 +58,8 @@ function lineupHaystack(l: Lineup): string {
     l.agentSlug,
     l.doubleShock ? "double shock" : undefined,
     l.jump || l.jump2 ? "jump" : undefined,
+    l.crouch ? "crouch" : undefined,
+    l.precision ? `${l.precision} precision` : undefined,
     ...(l.steps?.map((s) => s.caption) ?? []),
   ];
   return parts.filter(Boolean).join(" ").toLowerCase();
@@ -62,17 +79,67 @@ export default function MapClient({
   canEdit: boolean;
 }) {
   const router = useRouter();
-  const [side, setSide] = useState<View | null>(null);
+  const params = useSearchParams();
+  // Seed initial state from the URL so shared/bookmarked deep links restore the
+  // exact view (map is already in the path; side/agent/site/search/lineup here).
+  const initialSide = (() => {
+    const s = params.get("side");
+    return s === "Attack" || s === "Defense" || s === "all" ? s : null;
+  })();
+  // Default to the spatial minimap view; only fall to the list when the URL
+  // explicitly asks for it (e.g. a shared list/lineup deep link).
+  const [view, setView] = useState<"list" | "minimap">(
+    params.get("view") === "list" ? "list" : "minimap",
+  );
+  const [side, setSide] = useState<View | null>(initialSide);
   const [switching, setSwitching] = useState(false);
-  const [agent, setAgent] = useState<string>("all");
-  const [siteFilter, setSiteFilter] = useState<string>("all");
+  const [agent, setAgent] = useState<string>(params.get("agent") || "all");
+  const [siteFilter, setSiteFilter] = useState<string>(
+    params.get("site") || "all",
+  );
   const [doubleShockOnly, setDoubleShockOnly] = useState(false);
-  const [query, setQuery] = useState("");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [query, setQuery] = useState(params.get("q") || "");
   // Side filter used only within the combined "all" view.
   const [allSideFilter, setAllSideFilter] = useState<"all" | Side>("all");
   const [viewing, setViewing] = useState<Lineup | null>(null);
   const [editing, setEditing] = useState<Lineup | null>(null);
   const [deleting, setDeleting] = useState<Lineup | null>(null);
+
+  const { favorites, isFavorite } = useFavorites();
+
+  // On first load, if the URL points at a specific lineup, open it (and make
+  // sure a side is selected so the list view it lives in is rendered).
+  useEffect(() => {
+    const id = params.get("lineup");
+    if (!id) return;
+    const l = lineups.find((x) => x.id === id);
+    if (!l) return;
+    // The detail modal lives in the list view, so force it when deep-linking.
+    setView("list");
+    setSide((prev) => prev ?? l.side);
+    setViewing(l);
+    // Run once on mount only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the address bar in sync with the current view so it's always ready to
+  // copy/share. Uses replaceState (not the router) to avoid re-fetching.
+  useEffect(() => {
+    const p = new URLSearchParams();
+    if (view === "list") p.set("view", "list");
+    if (side) p.set("side", side);
+    if (agent !== "all") p.set("agent", agent);
+    if (siteFilter !== "all") p.set("site", siteFilter);
+    if (query.trim()) p.set("q", query.trim());
+    if (viewing) p.set("lineup", viewing.id);
+    const qs = p.toString();
+    window.history.replaceState(
+      null,
+      "",
+      qs ? `${window.location.pathname}?${qs}` : window.location.pathname,
+    );
+  }, [view, side, agent, siteFilter, query, viewing]);
 
   function switchSide() {
     if (switching || !side || side === "all") return;
@@ -84,6 +151,7 @@ export default function MapClient({
       setAgent("all");
       setSiteFilter("all");
       setDoubleShockOnly(false);
+      setFavoritesOnly(false);
       setQuery("");
       setAllSideFilter("all");
     }, 440);
@@ -91,6 +159,7 @@ export default function MapClient({
   }
 
   const sideAccent = side === "Defense" ? "#38bdf8" : "#ff4655";
+  const siteFilters = siteFiltersFor(mapSlug);
 
   const sideLineups = useMemo(
     () =>
@@ -151,12 +220,24 @@ export default function MapClient({
     }
   }, [mapSlug, side, agent]);
 
+  // Favorites present in the current side/site slice — drives whether to show
+  // the Favorites chip at all.
+  const hasFavoritesHere = useMemo(
+    () => siteLineups.some((l) => isFavorite(l.id)),
+    [siteLineups, isFavorite],
+  );
+
+  useEffect(() => {
+    if (favoritesOnly && !hasFavoritesHere) setFavoritesOnly(false);
+  }, [favoritesOnly, hasFavoritesHere]);
+
   const filtered = useMemo(() => {
     let out =
       agent === "all"
         ? siteLineups
         : siteLineups.filter((l) => l.agentSlug === agent);
     if (doubleShockOnly) out = out.filter((l) => l.doubleShock);
+    if (favoritesOnly) out = out.filter((l) => isFavorite(l.id));
     const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     if (terms.length) {
       out = out.filter((l) => {
@@ -165,7 +246,7 @@ export default function MapClient({
       });
     }
     return out;
-  }, [agent, siteLineups, doubleShockOnly, query]);
+  }, [agent, siteLineups, doubleShockOnly, favoritesOnly, favorites, query]);
 
   return (
     <div
@@ -194,24 +275,50 @@ export default function MapClient({
           </Link>
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
             <h1 className="font-display text-5xl tracking-widest">{mapName}</h1>
-            {side && (
-              <div className="flex flex-wrap items-center gap-2 pb-1.5">
-                {SITE_FILTERS.map((s) => (
-                  <FilterChip
-                    key={s.id}
-                    label={s.label}
-                    active={siteFilter === s.id}
-                    onClick={() => setSiteFilter(s.id)}
-                  />
-                ))}
-              </div>
-            )}
+            <div className="flex flex-wrap items-center gap-3 pb-1.5">
+              <ViewToggle view={view} onChange={setView} />
+              {view === "list" && side && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {siteFilters.map((s) => (
+                    <FilterChip
+                      key={s.id}
+                      label={s.label}
+                      active={siteFilter === s.id}
+                      onClick={() => setSiteFilter(s.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       <div className="mx-auto max-w-6xl px-4 py-8">
-        {!side ? (
+        {view === "minimap" ? (
+          <div>
+            <MinimapView mapSlug={mapSlug} lineups={lineups} />
+            <div className="mt-8 flex justify-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setView("list");
+                  setSide("all");
+                  setAgent("all");
+                  setSiteFilter("all");
+                  setDoubleShockOnly(false);
+                  setFavoritesOnly(false);
+                  setQuery("");
+                  setAllSideFilter("all");
+                }}
+                className="rounded-full border border-panel-border bg-panel px-6 py-2.5 text-sm font-semibold transition hover:border-accent/60 hover:text-accent"
+              >
+                See all lineups
+                <span className="ml-2 text-foreground/40">{lineups.length}</span>
+              </button>
+            </div>
+          </div>
+        ) : !side ? (
           <SideSelect
             mapName={mapName}
             mapImage={mapImage}
@@ -224,6 +331,7 @@ export default function MapClient({
               setAgent("all");
               setSiteFilter("all");
               setDoubleShockOnly(false);
+              setFavoritesOnly(false);
               setQuery("");
               setAllSideFilter("all");
             }}
@@ -297,15 +405,22 @@ export default function MapClient({
                     onClick={() => setAgent(a.slug)}
                   />
                 ))}
+                {(hasDoubleShock || hasFavoritesHere) && (
+                  <span className="mx-1 h-5 w-px self-center bg-panel-border" />
+                )}
                 {hasDoubleShock && (
-                  <>
-                    <span className="mx-1 h-5 w-px self-center bg-panel-border" />
-                    <FilterChip
-                      label="Double Shock"
-                      active={doubleShockOnly}
-                      onClick={() => setDoubleShockOnly((v) => !v)}
-                    />
-                  </>
+                  <FilterChip
+                    label="Double Shock"
+                    active={doubleShockOnly}
+                    onClick={() => setDoubleShockOnly((v) => !v)}
+                  />
+                )}
+                {hasFavoritesHere && (
+                  <FilterChip
+                    label="★ Favorites"
+                    active={favoritesOnly}
+                    onClick={() => setFavoritesOnly((v) => !v)}
+                  />
                 )}
               </div>
               <LineupSearch value={query} onChange={setQuery} />
@@ -329,7 +444,7 @@ export default function MapClient({
                     No {side === "all" ? "" : `${side} `}lineups yet for{" "}
                     {mapName}
                     {siteFilter !== "all"
-                      ? ` on ${SITE_FILTERS.find((s) => s.id === siteFilter)?.label}`
+                      ? ` on ${siteFilters.find((s) => s.id === siteFilter)?.label}`
                       : ""}
                     {agent !== "all" ? ` (${getAgent(agent)?.name})` : ""}.
                   </p>
@@ -545,6 +660,36 @@ function CorrodeTransition() {
   );
 }
 
+function ViewToggle({
+  view,
+  onChange,
+}: {
+  view: "list" | "minimap";
+  onChange: (v: "list" | "minimap") => void;
+}) {
+  const opts: { id: "list" | "minimap"; label: string }[] = [
+    { id: "list", label: "List" },
+    { id: "minimap", label: "Minimap" },
+  ];
+  return (
+    <div className="flex overflow-hidden rounded-full border border-panel-border bg-panel/80 backdrop-blur">
+      {opts.map((o) => (
+        <button
+          key={o.id}
+          onClick={() => onChange(o.id)}
+          className={`px-4 py-1.5 text-sm font-medium transition ${
+            view === o.id
+              ? "bg-accent text-white"
+              : "text-foreground/70 hover:text-foreground"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function FilterChip({
   label,
   active,
@@ -698,7 +843,7 @@ function LineupOverlayBadges({
   return (
     <div
       className={`pointer-events-none absolute left-2 top-2 z-[5] flex flex-col items-start gap-1 ${
-        reserveKebab ? "right-11" : "right-2"
+        reserveKebab ? "right-[4.75rem]" : "right-2"
       }`}
     >
       <div className="flex flex-wrap items-center gap-1">
@@ -826,7 +971,18 @@ function LineupCard({
   const hasSteps = steps.length > 0;
   const [menuOpen, setMenuOpen] = useState(false);
   const [lightbox, setLightbox] = useState(false);
+  const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(lineupLink(lineup));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard blocked — ignore.
+    }
+  }
 
   const { stepOverlays, placedBothDarts, isSova, isDouble } =
     buildCardDartOverlays(lineup);
@@ -844,54 +1000,75 @@ function LineupCard({
 
   return (
     <div className="relative rounded-lg border border-panel-border bg-panel overflow-hidden hover:border-accent/60 transition">
-      {/* Kebab menu (admin only) */}
-      {canEdit && (
-      <div ref={menuRef} className="absolute top-2 right-2 z-10">
-        <button
-          aria-label="Lineup options"
-          onClick={(e) => {
-            e.stopPropagation();
-            setMenuOpen((o) => !o);
-          }}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-lg leading-none hover:bg-black/80"
-        >
-          ⋮
-        </button>
-        {menuOpen && (
-          <div className="absolute right-0 mt-1 w-32 overflow-hidden rounded-md border border-panel-border bg-panel shadow-lg">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenuOpen(false);
-                setLightbox(true);
-              }}
-              className="block w-full px-3 py-2 text-left text-sm hover:bg-panel-border"
-            >
-              Preview
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenuOpen(false);
-                onEdit();
-              }}
-              className="block w-full px-3 py-2 text-left text-sm hover:bg-panel-border"
-            >
-              Edit
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenuOpen(false);
-                onDelete();
-              }}
-              className="block w-full px-3 py-2 text-left text-sm text-accent hover:bg-panel-border"
-            >
-              Delete
-            </button>
-          </div>
-        )}
+      {/* Favorite star + options menu (star & Preview/Copy for everyone). */}
+      <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+        <FavoriteStar id={lineup.id} />
+        <div ref={menuRef} className="relative">
+          <button
+            aria-label="Lineup options"
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenuOpen((o) => !o);
+            }}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-lg leading-none hover:bg-black/80"
+          >
+            ⋮
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 mt-1 w-36 overflow-hidden rounded-md border border-panel-border bg-panel shadow-lg">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(false);
+                  setLightbox(true);
+                }}
+                className="block w-full px-3 py-2 text-left text-sm hover:bg-panel-border"
+              >
+                Preview
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(false);
+                  copyLink();
+                }}
+                className="block w-full px-3 py-2 text-left text-sm hover:bg-panel-border"
+              >
+                Copy link
+              </button>
+              {canEdit && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuOpen(false);
+                      onEdit();
+                    }}
+                    className="block w-full px-3 py-2 text-left text-sm hover:bg-panel-border"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuOpen(false);
+                      onDelete();
+                    }}
+                    className="block w-full px-3 py-2 text-left text-sm text-accent hover:bg-panel-border"
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
+
+      {copied && (
+        <div className="pointer-events-none absolute right-2 top-12 z-20 rounded bg-black/80 px-2 py-1 text-xs text-white">
+          Link copied
+        </div>
       )}
 
       {/* Media preview: step carousel with captions */}
@@ -918,7 +1095,7 @@ function LineupCard({
           isSova={isSova}
           isDouble={isDouble}
           placedBothDarts={placedBothDarts}
-          reserveKebab={canEdit}
+          reserveKebab
         />
       </div>
 
@@ -940,6 +1117,7 @@ function LineupCard({
               {lineup.notes}
             </p>
           )}
+          <LineupTags lineup={lineup} className="mt-2" />
         </div>
       </button>
     </div>
@@ -1051,6 +1229,17 @@ function LineupModal({
   const hasVisibleSteps = steps.some((s) => s.image || s.caption.trim());
   const { overlays: detailOverlays, placedAll } =
     buildDetailDartOverlays(lineup);
+  const [copied, setCopied] = useState(false);
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(lineupLink(lineup));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard blocked — ignore.
+    }
+  }
 
   return (
     <ModalShell onClose={onClose}>
@@ -1066,13 +1255,23 @@ function LineupModal({
           </div>
           <h2 className="mt-1 text-xl font-bold">{lineup.title}</h2>
         </div>
-        <button
-          onClick={onClose}
-          className="rounded p-1 text-foreground/60 hover:text-accent"
-          aria-label="Close"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-1">
+          <FavoriteStar id={lineup.id} size="sm" />
+          <button
+            onClick={copyLink}
+            className="rounded-full bg-black/40 px-3 py-1.5 text-xs font-medium text-foreground/80 hover:bg-black/60"
+            aria-label="Copy link"
+          >
+            {copied ? "Copied!" : "Copy link"}
+          </button>
+          <button
+            onClick={onClose}
+            className="rounded p-1 text-foreground/60 hover:text-accent"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
       </div>
       <div className="p-5 space-y-5">
         {/* Dart strengths are shown under their aim steps below; only fall back
@@ -1107,11 +1306,7 @@ function LineupModal({
               />
             )
           ))}
-        {lineup.jump && lineup.agentSlug !== "sova" && (
-          <span className="inline-block rounded bg-accent/80 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
-            Jump throw
-          </span>
-        )}
+        <LineupTags lineup={lineup} />
         {lineup.notes && (
           <p className="text-foreground/80 whitespace-pre-line">
             {lineup.notes}
@@ -1365,10 +1560,32 @@ function EditLineupModal({
             onDoubleShockChange={setDoubleShock}
           />
 
-          <JumpCheckbox
-            show={!!agentSlug && agentSlug !== "sova"}
-            defaultChecked={!!lineup.jump}
+          <MechanicsFields
+            agentSlug={agentSlug}
+            defaults={{
+              jump: lineup.jump,
+              crouch: lineup.crouch,
+              timeToLand: lineup.timeToLand,
+              precision: lineup.precision,
+            }}
           />
+
+          {mapSlug && (
+            <MinimapPicker
+              key={mapSlug}
+              mapSlug={mapSlug}
+              defaultFrom={
+                lineup.fromX != null && lineup.fromY != null
+                  ? { x: lineup.fromX, y: lineup.fromY }
+                  : undefined
+              }
+              defaultTo={
+                lineup.toX != null && lineup.toY != null
+                  ? { x: lineup.toX, y: lineup.toY }
+                  : undefined
+              }
+            />
+          )}
 
           <Field label="Notes / instructions">
             <textarea

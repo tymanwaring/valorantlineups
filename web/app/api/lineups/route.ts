@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLineups, addLineup } from "@/lib/store";
 import type { NewLineup } from "@/lib/types";
+import { PRECISION_LEVELS } from "@/lib/types";
 import { getMap } from "@/lib/maps";
 import { getAgent } from "@/lib/agents";
 import { parseStepsFromForm } from "@/lib/steps-form";
@@ -24,6 +25,29 @@ function parseIntField(
 
 function parseBool(value: FormDataEntryValue | null): boolean {
   return value === "on" || value === "true" || value === "1";
+}
+
+// Normalized (0-1) minimap coordinate. Returns undefined when absent/invalid.
+function parseCoord(value: FormDataEntryValue | null): number | undefined {
+  if (value == null || value === "") return undefined;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return undefined;
+  return Math.min(1, Math.max(0, n));
+}
+
+// Seconds for a projectile to land. Clamped to a sane 0-60s, one decimal.
+function parseSeconds(value: FormDataEntryValue | null): number | undefined {
+  if (value == null || value === "") return undefined;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return undefined;
+  return Math.round(Math.min(60, n) * 10) / 10;
+}
+
+function parsePrecision(value: FormDataEntryValue | null): string | undefined {
+  const v = String(value ?? "").trim();
+  return PRECISION_LEVELS.includes(v as (typeof PRECISION_LEVELS)[number])
+    ? v
+    : undefined;
 }
 
 export async function POST(req: NextRequest) {
@@ -61,6 +85,9 @@ export async function POST(req: NextRequest) {
   const charge = parseIntField(form.get("charge"), 0, 3);
   const bounces = parseIntField(form.get("bounces"), 0, 2);
   const jump = parseBool(form.get("jump"));
+  const crouch = parseBool(form.get("crouch"));
+  const timeToLand = parseSeconds(form.get("timeToLand"));
+  const precision = parsePrecision(form.get("precision"));
   const isShockDart = agentSlug === "sova" && ability === "Shock Dart";
   const doubleShock = isShockDart && parseBool(form.get("doubleShock"));
 
@@ -77,11 +104,18 @@ export async function POST(req: NextRequest) {
     charge: agentSlug === "sova" ? charge : undefined,
     bounces: agentSlug === "sova" ? bounces : undefined,
     jump: jump || undefined,
+    crouch: crouch || undefined,
+    timeToLand,
+    precision,
     doubleShock: doubleShock || undefined,
     // Second dart values only apply to double-shock lineups.
     charge2: doubleShock ? parseIntField(form.get("charge2"), 0, 3) : undefined,
     bounces2: doubleShock ? parseIntField(form.get("bounces2"), 0, 2) : undefined,
     jump2: doubleShock ? parseBool(form.get("jump2")) || undefined : undefined,
+    fromX: parseCoord(form.get("fromX")),
+    fromY: parseCoord(form.get("fromY")),
+    toX: parseCoord(form.get("toX")),
+    toY: parseCoord(form.get("toY")),
     notes: notes || undefined,
   };
 

@@ -2,6 +2,8 @@ export type MapInfo = {
   slug: string;
   name: string;
   image: string;
+  /** Top-down radar minimap (from valorant-api.com displayIcon). */
+  minimap: string;
   /** Bomb sites available on this map, in canonical order. */
   sites: string[];
 };
@@ -35,6 +37,7 @@ export const MAPS: MapInfo[] = [
     name,
     // ?v bump busts browser cache whenever the underlying image changes.
     image: `/maps/${name}.png?v=3`,
+    minimap: `/minimaps/${name}.png?v=1`,
     sites: sitesFor(slug),
   };
 });

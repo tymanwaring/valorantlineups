@@ -104,10 +104,17 @@ async function ensureSchema(): Promise<void> {
           charge int,
           bounces int,
           jump boolean NOT NULL DEFAULT false,
+          crouch boolean NOT NULL DEFAULT false,
+          time_to_land double precision,
+          precision_level text,
           double_shock boolean NOT NULL DEFAULT false,
           charge2 int,
           bounces2 int,
           jump2 boolean NOT NULL DEFAULT false,
+          from_x double precision,
+          from_y double precision,
+          to_x double precision,
+          to_y double precision,
           notes text,
           created_at timestamptz NOT NULL DEFAULT now()
         )
@@ -123,6 +130,13 @@ async function ensureSchema(): Promise<void> {
       await q`ALTER TABLE lineups ADD COLUMN IF NOT EXISTS bounces2 int`;
       await q`ALTER TABLE lineups ADD COLUMN IF NOT EXISTS jump boolean NOT NULL DEFAULT false`;
       await q`ALTER TABLE lineups ADD COLUMN IF NOT EXISTS jump2 boolean NOT NULL DEFAULT false`;
+      await q`ALTER TABLE lineups ADD COLUMN IF NOT EXISTS crouch boolean NOT NULL DEFAULT false`;
+      await q`ALTER TABLE lineups ADD COLUMN IF NOT EXISTS time_to_land double precision`;
+      await q`ALTER TABLE lineups ADD COLUMN IF NOT EXISTS precision_level text`;
+      await q`ALTER TABLE lineups ADD COLUMN IF NOT EXISTS from_x double precision`;
+      await q`ALTER TABLE lineups ADD COLUMN IF NOT EXISTS from_y double precision`;
+      await q`ALTER TABLE lineups ADD COLUMN IF NOT EXISTS to_x double precision`;
+      await q`ALTER TABLE lineups ADD COLUMN IF NOT EXISTS to_y double precision`;
       await q`
         CREATE TABLE IF NOT EXISTS rotation (
           map_slug text PRIMARY KEY
@@ -185,10 +199,17 @@ function rowToLineup(r: Row): Lineup {
     charge: r.charge == null ? undefined : Number(r.charge),
     bounces: r.bounces == null ? undefined : Number(r.bounces),
     jump: r.jump === true ? true : undefined,
+    crouch: r.crouch === true ? true : undefined,
+    timeToLand: r.time_to_land == null ? undefined : Number(r.time_to_land),
+    precision: (r.precision_level as string) || undefined,
     doubleShock: r.double_shock === true ? true : undefined,
     charge2: r.charge2 == null ? undefined : Number(r.charge2),
     bounces2: r.bounces2 == null ? undefined : Number(r.bounces2),
     jump2: r.jump2 === true ? true : undefined,
+    fromX: r.from_x == null ? undefined : Number(r.from_x),
+    fromY: r.from_y == null ? undefined : Number(r.from_y),
+    toX: r.to_x == null ? undefined : Number(r.to_x),
+    toY: r.to_y == null ? undefined : Number(r.to_y),
     notes: (r.notes as string) ?? undefined,
     createdAt:
       r.created_at instanceof Date
@@ -230,11 +251,12 @@ export async function pgAddLineup(data: NewLineup): Promise<Lineup> {
   const id = randomUUID();
   const createdAt = new Date().toISOString();
   await db()`
-    INSERT INTO lineups (id, map_slug, agent_slug, title, ability, side, site, plant_spot, steps, charge, bounces, jump, double_shock, charge2, bounces2, jump2, notes, created_at)
+    INSERT INTO lineups (id, map_slug, agent_slug, title, ability, side, site, plant_spot, steps, charge, bounces, jump, crouch, time_to_land, precision_level, double_shock, charge2, bounces2, jump2, from_x, from_y, to_x, to_y, notes, created_at)
     VALUES (
       ${id}::uuid, ${data.mapSlug}, ${data.agentSlug}, ${data.title}, ${data.ability ?? ""},
       ${data.side}, ${data.site ?? null}, ${data.plantSpot ?? null}, ${JSON.stringify(data.steps ?? [])}::jsonb, ${data.charge ?? null}, ${data.bounces ?? null},
-      ${data.jump ?? false}, ${data.doubleShock ?? false}, ${data.charge2 ?? null}, ${data.bounces2 ?? null}, ${data.jump2 ?? false}, ${data.notes ?? null}, ${createdAt}
+      ${data.jump ?? false}, ${data.crouch ?? false}, ${data.timeToLand ?? null}, ${data.precision ?? null}, ${data.doubleShock ?? false}, ${data.charge2 ?? null}, ${data.bounces2 ?? null}, ${data.jump2 ?? false},
+      ${data.fromX ?? null}, ${data.fromY ?? null}, ${data.toX ?? null}, ${data.toY ?? null}, ${data.notes ?? null}, ${createdAt}
     )
   `;
   return { ...data, id, createdAt };
@@ -260,10 +282,17 @@ export async function pgUpdateLineup(
       charge = ${merged.charge ?? null},
       bounces = ${merged.bounces ?? null},
       jump = ${merged.jump ?? false},
+      crouch = ${merged.crouch ?? false},
+      time_to_land = ${merged.timeToLand ?? null},
+      precision_level = ${merged.precision ?? null},
       double_shock = ${merged.doubleShock ?? false},
       charge2 = ${merged.charge2 ?? null},
       bounces2 = ${merged.bounces2 ?? null},
       jump2 = ${merged.jump2 ?? false},
+      from_x = ${merged.fromX ?? null},
+      from_y = ${merged.fromY ?? null},
+      to_x = ${merged.toX ?? null},
+      to_y = ${merged.toY ?? null},
       notes = ${merged.notes ?? null}
     WHERE id = ${id}::uuid
   `;

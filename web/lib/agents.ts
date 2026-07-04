@@ -3,10 +3,12 @@ export type AgentInfo = {
   name: string;
   role: "Duelist" | "Initiator" | "Controller" | "Sentinel";
   abilities: string[];
+  /** Agent portrait icon (from valorant-api.com), served from /agents/. */
+  icon: string;
 };
 
 // Agents whose kits are commonly used for lineups (projectiles / AoE).
-export const AGENTS: AgentInfo[] = [
+export const AGENTS: AgentInfo[] = ([
   {
     slug: "sova",
     name: "Sova",
@@ -73,7 +75,10 @@ export const AGENTS: AgentInfo[] = [
     role: "Controller",
     abilities: ["Gravity Well", "Nova Pulse", "Nebula", "Cosmic Divide"],
   },
-];
+] as Omit<AgentInfo, "icon">[]).map((a) => ({
+  ...a,
+  icon: `/agents/${a.slug}.png?v=1`,
+}));
 
 export function getAgent(slug: string): AgentInfo | undefined {
   return AGENTS.find((a) => a.slug === slug.toLowerCase());

@@ -22,6 +22,12 @@ export type Lineup = {
   bounces?: number;
   /** Whether the (first/only) dart requires a jump throw. */
   jump?: boolean;
+  /** Whether the lineup requires crouching. */
+  crouch?: boolean;
+  /** Seconds for the projectile to land/activate after throwing. */
+  timeToLand?: number;
+  /** How precise the alignment must be: "Low" | "Medium" | "High". */
+  precision?: string;
   /** Sova Shock Dart double-shock (two darts) lineup. */
   doubleShock?: boolean;
   /** Second dart charge level (double-shock only). */
@@ -30,6 +36,12 @@ export type Lineup = {
   bounces2?: number;
   /** Whether the second dart requires a jump throw (double-shock only). */
   jump2?: boolean;
+  /** Normalized (0-1) minimap position the lineup is thrown FROM. */
+  fromX?: number;
+  fromY?: number;
+  /** Normalized (0-1) minimap position the lineup LANDS at (optional). */
+  toX?: number;
+  toY?: number;
   createdAt: string;
 
   /** @deprecated use steps[]; kept so legacy records still typecheck */
@@ -43,6 +55,9 @@ export type Lineup = {
 export type NewLineup = Omit<Lineup, "id" | "createdAt">;
 
 export const DEFAULT_STEP_CAPTIONS = ["Stand here", "Aim here", "Result"];
+
+/** Selectable precision levels for how exact a lineup's alignment must be. */
+export const PRECISION_LEVELS = ["Low", "Medium", "High"] as const;
 
 /** Steps for a Sova double-shock lineup, distinguishing the two darts. */
 export const DOUBLE_SHOCK_STEP_CAPTIONS = [
