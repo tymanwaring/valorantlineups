@@ -120,8 +120,14 @@ function MapCard({
         fill
         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
         className={`object-cover transition-transform duration-300 group-hover:scale-105 ${
-          inRotation ? "" : "grayscale-[35%] opacity-80"
+          inRotation ? "" : "grayscale-[45%] opacity-75"
         }`}
+      />
+      {/* Rotation-aware scrim: in-rotation maps stay vibrant while out-of-
+          rotation are pushed darker so bright splashes (e.g. Summit) match the
+          moody ones. The bottom gradient adds extra label contrast. */}
+      <div
+        className={`absolute inset-0 ${inRotation ? "bg-black/30" : "bg-black/60"}`}
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
 

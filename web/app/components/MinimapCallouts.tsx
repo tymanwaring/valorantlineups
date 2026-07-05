@@ -34,10 +34,15 @@ export default function MinimapCallouts({ slug }: { slug: string }) {
 
         const p = rotatePoint(c.x, c.y, rot);
 
+        // Anchor labels that sit near an edge so they grow inward instead of
+        // overflowing (e.g. Summit's attacker spawn in the bottom-left corner).
+        const tx = p.x < 0.12 ? "0%" : p.x > 0.88 ? "-100%" : "-50%";
+        const ty = p.y < 0.08 ? "0%" : p.y > 0.92 ? "-100%" : "-50%";
+
         return (
           <span
             key={`${c.n}-${i}`}
-            className={`absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap uppercase tracking-wide ${
+            className={`absolute whitespace-nowrap uppercase tracking-wide ${
               isSite
                 ? "text-xs font-bold"
                 : isSpawn
@@ -47,6 +52,7 @@ export default function MinimapCallouts({ slug }: { slug: string }) {
             style={{
               left: `${p.x * 100}%`,
               top: `${p.y * 100}%`,
+              transform: `translate(${tx}, ${ty})`,
               color,
               textShadow: "0 1px 3px rgba(0,0,0,0.95)",
             }}

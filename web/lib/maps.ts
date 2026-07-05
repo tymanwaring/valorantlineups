@@ -29,6 +29,7 @@ export const MAPS: MapInfo[] = [
   "Lotus",
   "Pearl",
   "Split",
+  "Summit",
   "Sunset",
 ].map((name) => {
   const slug = name.toLowerCase();
@@ -36,7 +37,7 @@ export const MAPS: MapInfo[] = [
     slug,
     name,
     // ?v bump busts browser cache whenever the underlying image changes.
-    image: `/maps/${name}.png?v=3`,
+    image: `/maps/${name}.png?v=4`,
     minimap: `/minimaps/${name}.png?v=1`,
     sites: sitesFor(slug),
   };

@@ -11,24 +11,30 @@ export function getCallouts(slug: string): Callout[] {
 
 export type Rotation = 0 | 90 | 180 | 270;
 
+const ROTATIONS: Rotation[] = [0, 90, 180, 270];
+
 /**
  * Rotation (clockwise degrees) that puts the attacker spawn at the bottom of
- * the minimap. Derived from the attacker-spawn callout position.
+ * the minimap. Prefers the rotation where the attacker spawn sits furthest
+ * BELOW the defender spawn — this captures the map's true axis and stays
+ * correct even when a spawn is tucked in a corner (a plain "max attacker Y"
+ * metric can pick a sideways rotation there). Falls back to attacker Y alone
+ * when a defender spawn callout isn't available.
  */
 export function attackerBottomRotation(slug: string): Rotation {
-  const spawn = getCallouts(slug).find(
-    (c) => c.n === "Spawn" && /attack/i.test(c.s),
-  );
-  if (!spawn) return 0;
-  // After each rotation, the attacker spawn's new Y; pick the one nearest bottom.
-  const cands: { deg: Rotation; y: number }[] = [
-    { deg: 0, y: spawn.y },
-    { deg: 90, y: spawn.x },
-    { deg: 180, y: 1 - spawn.y },
-    { deg: 270, y: 1 - spawn.x },
-  ];
-  cands.sort((a, b) => b.y - a.y);
-  return cands[0].deg;
+  const callouts = getCallouts(slug);
+  const attacker = callouts.find((c) => c.n === "Spawn" && /attack/i.test(c.s));
+  if (!attacker) return 0;
+  const defender = callouts.find((c) => c.n === "Spawn" && /defend/i.test(c.s));
+
+  const score = (deg: Rotation): number => {
+    const a = rotatePoint(attacker.x, attacker.y, deg);
+    if (!defender) return a.y;
+    const d = rotatePoint(defender.x, defender.y, deg);
+    return a.y - d.y;
+  };
+
+  return [...ROTATIONS].sort((x, y) => score(y) - score(x))[0];
 }
 
 /** Map a point from original minimap space into the rotated display space. */
