@@ -727,7 +727,7 @@ function LineupLightbox({
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-5xl"
+        className="relative w-full max-w-6xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="absolute -top-9 right-0 flex items-center gap-4">
@@ -755,6 +755,7 @@ function LineupLightbox({
             steps={editor.steps}
             overlays={stepOverlays}
             enableKeyboard
+            enableZoom
             onIndexChange={editor.setCurrent}
           />
           <LineupOverlayBadges

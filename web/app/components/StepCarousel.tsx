@@ -4,12 +4,17 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import type { LineupStep } from "@/lib/types";
 import AnnotatedImage from "@/app/components/AnnotatedImage";
 
+// Hold-Shift precision magnifier (only in full-screen previews).
+const LENS_SIZE = 200;
+const LENS_ZOOM = 2.5;
+
 export default function StepCarousel({
   steps,
   onImageClick,
   enableKeyboard = true,
   overlays,
   onIndexChange,
+  enableZoom = false,
 }: {
   steps: LineupStep[];
   /** When set, clicking the image (not the controls) calls this. */
@@ -19,9 +24,48 @@ export default function StepCarousel({
   overlays?: (ReactNode | null)[];
   /** Notified whenever the visible step index changes (and on mount). */
   onIndexChange?: (i: number) => void;
+  /** Enable the hold-Shift magnifier over the image (full-screen previews). */
+  enableZoom?: boolean;
 }) {
   const n = steps.length;
   const [i, setI] = useState(0);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [lens, setLens] = useState<{
+    cx: number;
+    cy: number;
+    w: number;
+    h: number;
+  } | null>(null);
+  const [shiftHeld, setShiftHeld] = useState(false);
+
+  useEffect(() => {
+    if (!enableZoom) return;
+    const down = (e: KeyboardEvent) => e.key === "Shift" && setShiftHeld(true);
+    const up = (e: KeyboardEvent) => e.key === "Shift" && setShiftHeld(false);
+    const blur = () => setShiftHeld(false);
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", blur);
+    };
+  }, [enableZoom]);
+
+  const trackLens = (e: React.MouseEvent) => {
+    if (!enableZoom) return;
+    const box = frameRef.current;
+    if (!box) return;
+    const rect = box.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    if (cx < 0 || cy < 0 || cx > rect.width || cy > rect.height) {
+      setLens(null);
+      return;
+    }
+    setLens({ cx, cy, w: rect.width, h: rect.height });
+  };
 
   const prev = useCallback(() => setI((v) => (v - 1 + n) % n), [n]);
   const next = useCallback(() => setI((v) => (v + 1) % n), [n]);
@@ -76,12 +120,15 @@ export default function StepCarousel({
     <div className="space-y-3">
       <div className="relative overflow-hidden rounded-lg border border-panel-border bg-black/50">
         <div
+          ref={frameRef}
           className={`relative flex aspect-video items-center justify-center ${
-            onImageClick ? "cursor-pointer" : ""
+            enableZoom && shiftHeld ? "cursor-zoom-in" : onImageClick ? "cursor-pointer" : ""
           }`}
           onClick={onImageClick}
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
+          onMouseMove={trackLens}
+          onMouseLeave={() => setLens(null)}
         >
           {step.image ? (
             <AnnotatedImage
@@ -94,6 +141,41 @@ export default function StepCarousel({
             <span className="px-6 text-center text-foreground/40">
               No image for this step
             </span>
+          )}
+
+          {/* Hold-Shift precision magnifier over the current image. */}
+          {enableZoom && shiftHeld && lens && step.image && (
+            <div
+              className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full border-2 border-white/80 shadow-xl"
+              style={{
+                left: lens.cx,
+                top: lens.cy,
+                width: LENS_SIZE,
+                height: LENS_SIZE,
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  width: lens.w,
+                  height: lens.h,
+                  transformOrigin: "0 0",
+                  transform: `translate(${LENS_SIZE / 2 - LENS_ZOOM * lens.cx}px, ${
+                    LENS_SIZE / 2 - LENS_ZOOM * lens.cy
+                  }px) scale(${LENS_ZOOM})`,
+                }}
+              >
+                <AnnotatedImage
+                  src={step.image}
+                  annotations={step.annotations}
+                  alt=""
+                  className="h-full w-full"
+                />
+              </div>
+              <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-accent/70" />
+              <span className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-accent/70" />
+              <span className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-accent bg-accent/40" />
+            </div>
           )}
 
           {/* Caption overlay */}
