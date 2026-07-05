@@ -43,9 +43,15 @@ function fromSteps(steps: LineupStep[]): Row[] {
 export default function StepsEditor({
   initialSteps,
   doubleShock = false,
+  lineupId,
+  onAnnotationsSaved,
 }: {
   initialSteps?: LineupStep[];
   doubleShock?: boolean;
+  /** When editing an existing lineup, lets annotation saves persist instantly. */
+  lineupId?: string;
+  /** Called after annotations are persisted to the server (to refresh views). */
+  onAnnotationsSaved?: () => void;
 }) {
   const [rows, setRows] = useState<Row[]>(() => fromSteps(initialSteps ?? []));
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -56,6 +62,11 @@ export default function StepsEditor({
   const [errorId, setErrorId] = useState<{ id: number; msg: string } | null>(
     null,
   );
+  // Per-row instant-save status shown next to the Preview button.
+  const [annStatus, setAnnStatus] = useState<{
+    id: number;
+    state: "saving" | "saved";
+  } | null>(null);
   // Once the user edits steps we stop auto-populating defaults. Editing an
   // existing lineup counts as "touched" so we never clobber saved steps.
   const [touched, setTouched] = useState(() => (initialSteps?.length ?? 0) > 0);
@@ -146,6 +157,43 @@ export default function StepsEditor({
       [next[index], next[target]] = [next[target], next[index]];
       return next;
     });
+  }
+
+  // Persist a single step's annotations to the server right away, so the
+  // annotator's "Save" sticks without submitting the whole edit form. Only
+  // possible for already-saved images (existing lineup + server-hosted image);
+  // brand-new pending uploads still save with the form.
+  async function persistAnnotations(
+    row: Row,
+    annotations: StepAnnotation[],
+  ): Promise<void> {
+    if (!lineupId || !row.existingImage) return;
+    setAnnStatus({ id: row.id, state: "saving" });
+    try {
+      const res = await fetch(`/api/lineups/${lineupId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "annotations",
+          image: row.existingImage,
+          stepIndex: rows.findIndex((r) => r.id === row.id),
+          annotations,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      setAnnStatus({ id: row.id, state: "saved" });
+      onAnnotationsSaved?.();
+      setTimeout(
+        () => setAnnStatus((s) => (s?.id === row.id ? null : s)),
+        2000,
+      );
+    } catch {
+      setAnnStatus((s) => (s?.id === row.id ? null : s));
+      setErrorId({
+        id: row.id,
+        msg: "Couldn't save annotations now — they'll save when you submit the form.",
+      });
+    }
   }
 
   function onPickFile(id: number, input: HTMLInputElement) {
@@ -286,6 +334,17 @@ export default function StepsEditor({
                       ? `Preview (${row.annotations.length})`
                       : "Preview"}
                   </button>
+                  {annStatus?.id === row.id && (
+                    <span
+                      className={`shrink-0 text-xs ${
+                        annStatus.state === "saved"
+                          ? "text-green-400"
+                          : "text-foreground/50"
+                      }`}
+                    >
+                      {annStatus.state === "saved" ? "Saved ✓" : "Saving…"}
+                    </span>
+                  )}
                 </div>
                 {errorId?.id === row.id && (
                   <p className="text-xs text-accent">{errorId.msg}</p>
@@ -333,9 +392,11 @@ export default function StepsEditor({
           initialAnnotations={rows.find((r) => r.id === annotate.id)?.annotations}
           onCancel={() => setAnnotate(null)}
           onApply={(annotations) => {
+            const row = rows.find((r) => r.id === annotate.id);
             update(annotate.id, {
               annotations: annotations.length ? annotations : undefined,
             });
+            if (row) void persistAnnotations(row, annotations);
             setAnnotate(null);
           }}
         />

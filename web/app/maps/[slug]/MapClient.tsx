@@ -18,6 +18,8 @@ import FavoriteStar from "@/app/components/FavoriteStar";
 import { SovaIndicator } from "@/app/components/SovaIndicator";
 import StepCarousel from "@/app/components/StepCarousel";
 import AnnotatedImage from "@/app/components/AnnotatedImage";
+import ImageAnnotator from "@/app/components/ImageAnnotator";
+import { useAnnotatableSteps } from "@/app/components/useAnnotatableSteps";
 
 // Build a shareable deep link that opens a specific lineup on its map.
 export function lineupLink(l: Lineup): string {
@@ -250,7 +252,7 @@ export default function MapClient({
             &larr; All maps
           </Link>
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-            <h1 className="font-display text-5xl tracking-widest">{mapName}</h1>
+            <h1 className="font-display text-3xl tracking-widest sm:text-5xl">{mapName}</h1>
             <div className="flex flex-wrap items-center justify-end gap-3 pb-1.5">
               {view === "list" && (
                 <div className="flex flex-wrap items-center gap-2">
@@ -279,6 +281,7 @@ export default function MapClient({
               canEdit={canEdit}
               onEdit={(l) => setEditing(l)}
               onDelete={(l) => setDeleting(l)}
+              onRefresh={() => router.refresh()}
             />
             <div className="mt-8 flex justify-center">
               <button
@@ -408,6 +411,7 @@ export default function MapClient({
                     onOpen={() => setViewing(l)}
                     onEdit={() => setEditing(l)}
                     onDelete={() => setDeleting(l)}
+                    onSaved={() => router.refresh()}
                   />
                 ))}
               </div>
@@ -430,6 +434,7 @@ export default function MapClient({
             setEditing(null);
             router.refresh();
           }}
+          onInstantSaved={() => router.refresh()}
         />
       )}
 
@@ -692,21 +697,29 @@ function LineupOverlayBadges({
 function LineupLightbox({
   lineup,
   onClose,
+  canEdit = false,
+  onSaved,
 }: {
   lineup: Lineup;
   onClose: () => void;
+  canEdit?: boolean;
+  onSaved?: () => void;
 }) {
-  const steps = lineup.steps ?? [];
   const { stepOverlays, placedBothDarts, isSova, isDouble } =
     buildCardDartOverlays(lineup, "full");
+  const editor = useAnnotatableSteps(lineup.steps ?? [], {
+    lineupId: lineup.id,
+    onSaved,
+  });
 
   useEffect(() => {
+    if (editor.annotating) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, editor.annotating]);
 
   return (
     <div
@@ -717,15 +730,33 @@ function LineupLightbox({
         className="relative w-full max-w-5xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          onClick={onClose}
-          aria-label="Close preview"
-          className="absolute -top-9 right-0 flex items-center gap-1 text-sm text-white/70 hover:text-white"
-        >
-          ✕ Close
-        </button>
+        <div className="absolute -top-9 right-0 flex items-center gap-4">
+          {canEdit && editor.canAnnotate && (
+            <button
+              onClick={() => editor.setAnnotating(true)}
+              aria-label="Annotate this image"
+              title="Draw on this image"
+              className="flex items-center gap-1 text-sm text-white/70 hover:text-white"
+            >
+              ✎ Edit
+              {editor.saving && <span className="text-white/40">saving…</span>}
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            aria-label="Close preview"
+            className="flex items-center gap-1 text-sm text-white/70 hover:text-white"
+          >
+            ✕ Close
+          </button>
+        </div>
         <div className="relative">
-          <StepCarousel steps={steps} overlays={stepOverlays} enableKeyboard />
+          <StepCarousel
+            steps={editor.steps}
+            overlays={stepOverlays}
+            enableKeyboard
+            onIndexChange={editor.setCurrent}
+          />
           <LineupOverlayBadges
             lineup={lineup}
             isSova={isSova}
@@ -736,6 +767,15 @@ function LineupLightbox({
           />
         </div>
       </div>
+
+      {editor.annotating && editor.step?.image && (
+        <ImageAnnotator
+          src={editor.step.image}
+          initialAnnotations={editor.step.annotations}
+          onCancel={() => editor.setAnnotating(false)}
+          onApply={editor.apply}
+        />
+      )}
     </div>
   );
 }
@@ -746,12 +786,14 @@ function LineupCard({
   onOpen,
   onEdit,
   onDelete,
+  onSaved,
 }: {
   lineup: Lineup;
   canEdit: boolean;
   onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onSaved?: () => void;
 }) {
   const agent = getAgent(lineup.agentSlug);
   const steps = lineup.steps ?? [];
@@ -887,7 +929,12 @@ function LineupCard({
       </div>
 
       {lightbox && (
-        <LineupLightbox lineup={lineup} onClose={() => setLightbox(false)} />
+        <LineupLightbox
+          lineup={lineup}
+          onClose={() => setLightbox(false)}
+          canEdit={canEdit}
+          onSaved={onSaved}
+        />
       )}
 
       <button onClick={onOpen} className="block w-full text-left">
@@ -1193,10 +1240,12 @@ function EditLineupModal({
   lineup,
   onClose,
   onSaved,
+  onInstantSaved,
 }: {
   lineup: Lineup;
   onClose: () => void;
   onSaved: () => void;
+  onInstantSaved?: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -1239,7 +1288,7 @@ function EditLineupModal({
   }
 
   return (
-    <ModalShell onClose={onClose} maxWidth="max-w-xl">
+    <ModalShell onClose={onClose} maxWidth="max-w-4xl">
       <form onSubmit={handleSubmit}>
         <div className="flex items-center justify-between border-b border-panel-border p-5">
           <h2 className="text-lg font-bold">Edit Lineup</h2>
@@ -1384,7 +1433,12 @@ function EditLineupModal({
             />
           </Field>
 
-          <StepsEditor initialSteps={lineup.steps} doubleShock={isDoubleShock} />
+          <StepsEditor
+            initialSteps={lineup.steps}
+            doubleShock={isDoubleShock}
+            lineupId={lineup.id}
+            onAnnotationsSaved={onInstantSaved}
+          />
 
           {error && <p className="text-sm text-accent">{error}</p>}
         </div>

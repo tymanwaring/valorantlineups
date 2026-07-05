@@ -5,7 +5,9 @@ import type { StepAnnotation } from "@/lib/types";
 import {
   ANNOTATION_COLORS,
   CIRCLE_THICKNESSES,
+  ARROW_HEAD_SIZES,
   DEFAULT_CIRCLE_THICKNESS,
+  DEFAULT_ARROW_HEAD,
   DEFAULT_TEXT_SIZE,
 } from "@/lib/types";
 import { AnnotationStage } from "@/app/components/AnnotatedImage";
@@ -83,6 +85,7 @@ export default function ImageAnnotator({
   const [shapeColor, setShapeColor] = useState(ANNOTATION_COLORS[0]);
   const [textColor, setTextColor] = useState("#ffffff");
   const [thickness, setThickness] = useState<number>(DEFAULT_CIRCLE_THICKNESS);
+  const [arrowHead, setArrowHead] = useState<number>(DEFAULT_ARROW_HEAD);
   const [textSize, setTextSize] = useState<number>(DEFAULT_TEXT_SIZE);
   // Raw string for the font-size field so it can be cleared while typing.
   const [fontStr, setFontStr] = useState(() =>
@@ -93,6 +96,17 @@ export default function ImageAnnotator({
   const [edit, setEdit] = useState<Edit | null>(null);
   const [past, setPast] = useState<StepAnnotation[][]>([]);
   const [future, setFuture] = useState<StepAnnotation[][]>([]);
+  const [confirmClose, setConfirmClose] = useState(false);
+
+  // Snapshot of what we opened with, to detect unsaved changes.
+  const initialSnapshot = useRef(JSON.stringify(initialAnnotations ?? []));
+  const dirty = JSON.stringify(annotations) !== initialSnapshot.current;
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  const requestCancel = () => {
+    if (dirty) setConfirmClose(true);
+    else onCancel();
+  };
 
   // Refs mirror state so the window pointer handlers stay stable.
   const annRef = useRef(annotations);
@@ -101,6 +115,7 @@ export default function ImageAnnotator({
   const beforeRef = useRef<StepAnnotation[] | null>(null);
   const colorRef = useRef(color);
   const thicknessRef = useRef(thickness);
+  const arrowHeadRef = useRef(arrowHead);
   useEffect(() => void (annRef.current = annotations), [annotations]);
   // Keep the field in sync when size changes externally (e.g. selecting text),
   // but never while the user is actively editing it.
@@ -110,6 +125,7 @@ export default function ImageAnnotator({
   useEffect(() => void (boxRef.current = box), [box]);
   useEffect(() => void (colorRef.current = color), [color]);
   useEffect(() => void (thicknessRef.current = thickness), [thickness]);
+  useEffect(() => void (arrowHeadRef.current = arrowHead), [arrowHead]);
 
   const setOpBoth = (o: Op | null) => {
     opRef.current = o;
@@ -254,7 +270,7 @@ export default function ImageAnnotator({
         if (Math.hypot(o.cx - o.sx, o.cy - o.sy) > 0.01) {
           commit([
             ...annRef.current,
-            { type: "arrow", x1: o.sx, y1: o.sy, x2: o.cx, y2: o.cy, color: colorRef.current, t: thicknessRef.current },
+            { type: "arrow", x1: o.sx, y1: o.sy, x2: o.cx, y2: o.cy, color: colorRef.current, t: thicknessRef.current, head: arrowHeadRef.current },
           ]);
           setSelected(annRef.current.length);
         }
@@ -286,6 +302,7 @@ export default function ImageAnnotator({
       }
       if (e.key === "Escape") {
         if (selected != null) setSelected(null);
+        else if (dirtyRef.current) setConfirmClose(true);
         else onCancel();
         return;
       }
@@ -327,6 +344,13 @@ export default function ImageAnnotator({
         return;
       }
       setSelected(i);
+      // Sync toolbar controls to the selected annotation so its pickers reflect
+      // (and further tweaks apply to) the right shape.
+      const picked = annRef.current[i];
+      if (picked?.type === "arrow") {
+        setArrowHead(picked.head ?? DEFAULT_ARROW_HEAD);
+      }
+      if (picked?.type === "text") setTextSize(picked.size);
       beforeRef.current = annRef.current;
       setOpBoth({ kind: "move", index: i, sx: x, sy: y });
     } else if (tool === "circle") {
@@ -412,13 +436,23 @@ export default function ImageAnnotator({
       );
     }
   }
+  function pickArrowHead(head: number) {
+    setArrowHead(head);
+    if (selected != null && annRef.current[selected]?.type === "arrow") {
+      commit(
+        annRef.current.map((a, i) =>
+          i === selected && a.type === "arrow" ? { ...a, head } : a,
+        ),
+      );
+    }
+  }
 
   // Live draft while drawing.
   const draft: StepAnnotation | null =
     op?.kind === "drawCircle"
       ? { type: "circle", x: op.sx, y: op.sy, r: Math.max(distW(op.cx, op.cy, op.sx, op.sy), 0.004), color, t: thickness }
       : op?.kind === "drawArrow"
-        ? { type: "arrow", x1: op.sx, y1: op.sy, x2: op.cx, y2: op.cy, color, t: thickness }
+        ? { type: "arrow", x1: op.sx, y1: op.sy, x2: op.cx, y2: op.cy, color, t: thickness, head: arrowHead }
         : null;
 
   const { w, h } = box;
@@ -435,9 +469,9 @@ export default function ImageAnnotator({
   );
 
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-black/90 p-4">
-      {/* Toolbar */}
-      <div className="mb-3 flex max-w-[95vw] flex-wrap items-center justify-center gap-2 rounded-lg border border-panel-border bg-panel px-3 py-2">
+    <div className="fixed inset-0 z-[70] flex flex-col items-center justify-start overflow-y-auto bg-black/90 p-3 sm:justify-center sm:p-4">
+      {/* Toolbar — single scrollable row on phones, wraps + centers on wider. */}
+      <div className="mb-3 flex w-full max-w-[95vw] items-center gap-2 overflow-x-auto rounded-lg border border-panel-border bg-panel px-3 py-2 [&>*]:shrink-0 sm:flex-wrap sm:justify-center sm:overflow-visible">
         {TOOLS.map((t) => (
           <button
             key={t.id}
@@ -491,6 +525,28 @@ export default function ImageAnnotator({
             />
           </button>
         ))}
+
+        {(tool === "arrow" || sel?.type === "arrow") && (
+          <>
+            <span className="mx-1 h-5 w-px bg-panel-border" />
+            <span className="text-xs text-foreground/60">Head</span>
+            {ARROW_HEAD_SIZES.map((hSize) => (
+              <button
+                key={hSize.label}
+                type="button"
+                onClick={() => pickArrowHead(hSize.value)}
+                aria-label={`Arrowhead ${hSize.label}`}
+                className={`flex h-6 w-7 items-center justify-center rounded border text-xs transition ${
+                  arrowHead === hSize.value
+                    ? "border-accent bg-accent/20 text-accent"
+                    : "border-panel-border text-foreground/70 hover:border-accent/60"
+                }`}
+              >
+                {hSize.label}
+              </button>
+            ))}
+          </>
+        )}
 
         {(tool === "text" || sel?.type === "text") && (
           <>
@@ -570,7 +626,7 @@ export default function ImageAnnotator({
         <span className="mx-1 h-5 w-px bg-panel-border" />
         <button
           type="button"
-          onClick={onCancel}
+          onClick={requestCancel}
           className="rounded border border-panel-border px-3 py-1 text-xs hover:border-accent/60"
         >
           Cancel
@@ -593,14 +649,14 @@ export default function ImageAnnotator({
       </p>
 
       {/* Image + draw surface */}
-      <div className="relative inline-block max-h-[78vh] max-w-[92vw]">
+      <div className="relative inline-block max-h-[62vh] max-w-[95vw] sm:max-h-[78vh] sm:max-w-[92vw]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           ref={imgRef}
           src={src}
           alt="Annotate"
           onLoad={measure}
-          className="max-h-[78vh] max-w-[92vw] select-none rounded-lg border border-panel-border object-contain"
+          className="max-h-[62vh] max-w-[95vw] select-none rounded-lg border border-panel-border object-contain sm:max-h-[78vh] sm:max-w-[92vw]"
           draggable={false}
         />
         <div
@@ -683,6 +739,36 @@ export default function ImageAnnotator({
           )}
         </div>
       </div>
+
+      {confirmClose && (
+        <div className="absolute inset-0 z-[80] flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-xs rounded-lg border border-panel-border bg-panel p-4 text-center shadow-xl">
+            <p className="text-sm font-semibold">Discard changes?</p>
+            <p className="mt-1 text-xs text-foreground/60">
+              Your annotation edits haven&apos;t been saved.
+            </p>
+            <div className="mt-4 flex justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmClose(false)}
+                className="rounded border border-panel-border px-3 py-1.5 text-xs hover:border-accent/60"
+              >
+                Keep editing
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmClose(false);
+                  onCancel();
+                }}
+                className="rounded bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-500"
+              >
+                Discard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

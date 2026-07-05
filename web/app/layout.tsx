@@ -40,11 +40,14 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <header className="border-b border-panel-border bg-panel/60 backdrop-blur sticky top-0 z-20">
-          <div className="mx-auto max-w-6xl px-4 h-16 flex items-center justify-between">
-            <Link href="/" className="font-display text-2xl tracking-widest">
+          <div className="mx-auto max-w-6xl px-4 h-16 flex items-center justify-between gap-3">
+            <Link
+              href="/"
+              className="shrink-0 font-display text-xl tracking-widest sm:text-2xl"
+            >
               <span className="text-accent">brimmy</span>buddy
             </Link>
-            <nav className="flex items-center gap-4 sm:gap-6 text-sm font-medium">
+            <nav className="flex items-center gap-3 sm:gap-6 text-sm font-medium">
               <Link href="/" className="hover:text-accent transition-colors">
                 Maps
               </Link>

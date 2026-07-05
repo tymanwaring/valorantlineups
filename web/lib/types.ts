@@ -21,6 +21,8 @@ export type ArrowAnnotation = AnnotationBase & {
   y1: number;
   x2: number;
   y2: number;
+  /** Arrowhead length as a fraction of image width. */
+  head?: number;
 };
 /** Crosshair / aim marker at a precise point. r = arm half-length. */
 export type DotAnnotation = AnnotationBase & {
@@ -57,6 +59,16 @@ export const CIRCLE_THICKNESSES = [
 
 /** Default stroke thickness used when an annotation has none. */
 export const DEFAULT_CIRCLE_THICKNESS = 0.002;
+
+/** Selectable arrowhead sizes (fraction of image width). */
+export const ARROW_HEAD_SIZES = [
+  { label: "S", value: 0.01 },
+  { label: "M", value: 0.018 },
+  { label: "L", value: 0.028 },
+] as const;
+
+/** Default arrowhead length used when an arrow has none (kept small). */
+export const DEFAULT_ARROW_HEAD = 0.01;
 
 /** Default font size for a text annotation (fraction of image width). */
 export const DEFAULT_TEXT_SIZE = 0.02;
@@ -182,6 +194,7 @@ export function normalizeAnnotations(raw: unknown): StepAnnotation[] | undefined
         const x2 = num(a.x2);
         const y2 = num(a.y2);
         if (x1 == null || y1 == null || x2 == null || y2 == null) break;
+        const rawHead = num(a.head);
         out.push({
           type: "arrow",
           x1: clamp01(x1),
@@ -190,6 +203,7 @@ export function normalizeAnnotations(raw: unknown): StepAnnotation[] | undefined
           y2: clamp01(y2),
           color,
           t,
+          head: rawHead != null ? clamp(rawHead, 0.003, 0.1) : undefined,
         });
         break;
       }

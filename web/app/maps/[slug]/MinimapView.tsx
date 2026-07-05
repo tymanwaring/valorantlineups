@@ -5,6 +5,8 @@ import { getAgent, AGENTS } from "@/lib/agents";
 import { getMap } from "@/lib/maps";
 import type { Lineup } from "@/lib/types";
 import StepCarousel from "@/app/components/StepCarousel";
+import ImageAnnotator from "@/app/components/ImageAnnotator";
+import { useAnnotatableSteps } from "@/app/components/useAnnotatableSteps";
 import { SovaIndicator } from "@/app/components/SovaIndicator";
 import LineupTags from "@/app/components/LineupTags";
 import FavoriteStar from "@/app/components/FavoriteStar";
@@ -22,12 +24,14 @@ export default function MinimapView({
   canEdit = false,
   onEdit,
   onDelete,
+  onRefresh,
 }: {
   mapSlug: string;
   lineups: Lineup[];
   canEdit?: boolean;
   onEdit?: (l: Lineup) => void;
   onDelete?: (l: Lineup) => void;
+  onRefresh?: () => void;
 }) {
   const [side, setSide] = useState<SideFilter>("all");
   const [agent, setAgent] = useState<string>("all");
@@ -329,6 +333,7 @@ export default function MinimapView({
           lineup={selected}
           onClose={() => setSelected(null)}
           canEdit={canEdit}
+          onRefresh={onRefresh}
           onEdit={
             onEdit
               ? (l) => {
@@ -496,16 +501,35 @@ function MinimapDetail({
   canEdit = false,
   onEdit,
   onDelete,
+  onRefresh,
 }: {
   lineup: Lineup;
   onClose: () => void;
   canEdit?: boolean;
   onEdit?: (l: Lineup) => void;
   onDelete?: (l: Lineup) => void;
+  onRefresh?: () => void;
 }) {
   const agent = getAgent(lineup.agentSlug);
-  const steps = lineup.steps ?? [];
+  const editor = useAnnotatableSteps(lineup.steps ?? [], {
+    lineupId: lineup.id,
+    onSaved: onRefresh,
+  });
+  const steps = editor.steps;
   const hasSteps = steps.some((s) => s.image || s.caption.trim());
+  const [lightbox, setLightbox] = useState(false);
+
+  useEffect(() => {
+    if (!lightbox || editor.annotating) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setLightbox(false);
+      }
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [lightbox, editor.annotating]);
 
   return (
     <div
@@ -576,7 +600,11 @@ function MinimapDetail({
             </p>
           )}
           {hasSteps ? (
-            <StepCarousel steps={steps} enableKeyboard />
+            <StepCarousel
+              steps={steps}
+              enableKeyboard
+              onImageClick={() => setLightbox(true)}
+            />
           ) : (
             <p className="text-sm text-foreground/50">
               No steps attached to this lineup yet.
@@ -584,6 +612,58 @@ function MinimapDetail({
           )}
         </div>
       </div>
+
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 sm:p-8"
+          onClick={(e) => {
+            e.stopPropagation();
+            setLightbox(false);
+          }}
+        >
+          <div
+            className="relative w-full max-w-5xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="absolute -top-9 right-0 flex items-center gap-4">
+              {canEdit && editor.canAnnotate && (
+                <button
+                  onClick={() => editor.setAnnotating(true)}
+                  aria-label="Annotate this image"
+                  title="Draw on this image"
+                  className="flex items-center gap-1 text-sm text-white/70 hover:text-white"
+                >
+                  ✎ Edit
+                  {editor.saving && (
+                    <span className="text-white/40">saving…</span>
+                  )}
+                </button>
+              )}
+              <button
+                onClick={() => setLightbox(false)}
+                aria-label="Close preview"
+                className="flex items-center gap-1 text-sm text-white/70 hover:text-white"
+              >
+                ✕ Close
+              </button>
+            </div>
+            <StepCarousel
+              steps={steps}
+              enableKeyboard
+              onIndexChange={editor.setCurrent}
+            />
+          </div>
+        </div>
+      )}
+
+      {editor.annotating && editor.step?.image && (
+        <ImageAnnotator
+          src={editor.step.image}
+          initialAnnotations={editor.step.annotations}
+          onCancel={() => editor.setAnnotating(false)}
+          onApply={editor.apply}
+        />
+      )}
     </div>
   );
 }

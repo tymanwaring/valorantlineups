@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { LineupStep } from "@/lib/types";
 import AnnotatedImage from "@/app/components/AnnotatedImage";
 
@@ -9,6 +9,7 @@ export default function StepCarousel({
   onImageClick,
   enableKeyboard = true,
   overlays,
+  onIndexChange,
 }: {
   steps: LineupStep[];
   /** When set, clicking the image (not the controls) calls this. */
@@ -16,6 +17,8 @@ export default function StepCarousel({
   enableKeyboard?: boolean;
   /** Optional per-step overlay node shown above the caption (aligned to steps). */
   overlays?: (ReactNode | null)[];
+  /** Notified whenever the visible step index changes (and on mount). */
+  onIndexChange?: (i: number) => void;
 }) {
   const n = steps.length;
   const [i, setI] = useState(0);
@@ -27,6 +30,11 @@ export default function StepCarousel({
     setI(0);
   }, [steps]);
 
+  const current = Math.min(i, Math.max(0, n - 1));
+  useEffect(() => {
+    onIndexChange?.(current);
+  }, [current, onIndexChange]);
+
   useEffect(() => {
     if (n <= 1 || !enableKeyboard) return;
     function onKey(e: KeyboardEvent) {
@@ -37,9 +45,26 @@ export default function StepCarousel({
     return () => window.removeEventListener("keydown", onKey);
   }, [n, next, prev, enableKeyboard]);
 
+  // Touch swipe (mobile) — horizontal drag over the image switches steps.
+  const touch = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touch.current = { x: t.clientX, y: t.clientY };
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (!touch.current || n <= 1) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touch.current.x;
+    const dy = t.clientY - touch.current.y;
+    touch.current = null;
+    if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) {
+      if (dx < 0) next();
+      else prev();
+    }
+  };
+
   if (n === 0) return null;
 
-  const current = Math.min(i, n - 1);
   const step = steps[current];
 
   const stop = (fn: () => void) => (e: React.MouseEvent) => {
@@ -55,6 +80,8 @@ export default function StepCarousel({
             onImageClick ? "cursor-pointer" : ""
           }`}
           onClick={onImageClick}
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
         >
           {step.image ? (
             <AnnotatedImage

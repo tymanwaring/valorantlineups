@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { StepAnnotation } from "@/lib/types";
+import { DEFAULT_ARROW_HEAD } from "@/lib/types";
 import { arrowHeadPoints, strokePx } from "@/lib/annotations";
 
 type Box = { w: number; h: number; ox: number; oy: number };
@@ -35,7 +36,7 @@ export function AnnotationStage({
             const x2 = a.x2 * w;
             const y2 = a.y2 * h;
             const lw = strokePx(a, w);
-            const head = Math.max(lw * 3.5, w * 0.02);
+            const head = Math.max((a.head ?? DEFAULT_ARROW_HEAD) * w, lw * 1.5);
             return (
               <g key={i} style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}>
                 <line

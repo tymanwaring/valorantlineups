@@ -5,7 +5,7 @@ import { getAgent } from "@/lib/agents";
 import { deleteUpload, UploadError } from "@/lib/uploads";
 import { parseStepsFromForm, collectStepImages } from "@/lib/steps-form";
 import type { Lineup } from "@/lib/types";
-import { PRECISION_LEVELS } from "@/lib/types";
+import { PRECISION_LEVELS, normalizeAnnotations } from "@/lib/types";
 
 function parseIntField(
   value: FormDataEntryValue | null,
@@ -51,6 +51,43 @@ export async function PATCH(
   const existing = await getLineup(id);
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // Lightweight JSON path: persist a single step's annotations without
+  // rebuilding the whole lineup. Used by the annotator's "Save" so drawing
+  // changes stick immediately, without submitting the edit form.
+  const contentType = req.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    const body = (await req.json().catch(() => null)) as {
+      action?: string;
+      image?: string;
+      stepIndex?: number;
+      annotations?: unknown;
+    } | null;
+    if (!body || body.action !== "annotations") {
+      return NextResponse.json({ error: "Unsupported action" }, { status: 400 });
+    }
+    const image = String(body.image || "");
+    if (!image) {
+      return NextResponse.json({ error: "Missing image" }, { status: 400 });
+    }
+    const steps = existing.steps ?? [];
+    const idx =
+      typeof body.stepIndex === "number" && steps[body.stepIndex]?.image === image
+        ? body.stepIndex
+        : steps.findIndex((s) => s.image === image);
+    if (idx < 0) {
+      return NextResponse.json(
+        { error: "Step image not found" },
+        { status: 404 },
+      );
+    }
+    const annotations = normalizeAnnotations(body.annotations);
+    const nextSteps = steps.map((s, i) =>
+      i === idx ? { ...s, annotations } : s,
+    );
+    const updated = await updateLineup(id, { steps: nextSteps });
+    return NextResponse.json(updated);
   }
 
   const form = await req.formData();
