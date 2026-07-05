@@ -56,10 +56,10 @@ export const CIRCLE_THICKNESSES = [
 ] as const;
 
 /** Default stroke thickness used when an annotation has none. */
-export const DEFAULT_CIRCLE_THICKNESS = 0.004;
+export const DEFAULT_CIRCLE_THICKNESS = 0.002;
 
 /** Default font size for a text annotation (fraction of image width). */
-export const DEFAULT_TEXT_SIZE = 0.04;
+export const DEFAULT_TEXT_SIZE = 0.02;
 
 /** Default arm half-length for a dot/crosshair marker (fraction of width). */
 export const DEFAULT_DOT_RADIUS = 0.025;

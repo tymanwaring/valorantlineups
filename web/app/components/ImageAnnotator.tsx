@@ -78,6 +78,10 @@ export default function ImageAnnotator({
   const [selected, setSelected] = useState<number | null>(null);
   const [tool, setTool] = useState<Tool>("select");
   const [color, setColor] = useState(ANNOTATION_COLORS[0]);
+  // Remembered color preferences, kept separately for shapes vs. text so text
+  // can default to white while shapes stay on the last-used shape color.
+  const [shapeColor, setShapeColor] = useState(ANNOTATION_COLORS[0]);
+  const [textColor, setTextColor] = useState("#ffffff");
   const [thickness, setThickness] = useState<number>(DEFAULT_CIRCLE_THICKNESS);
   const [textSize, setTextSize] = useState<number>(DEFAULT_TEXT_SIZE);
   // Raw string for the font-size field so it can be cleared while typing.
@@ -238,7 +242,9 @@ export default function ImageAnnotator({
       if (!o) return;
       if (o.kind === "drawCircle") {
         const r = distW(o.cx, o.cy, o.sx, o.sy);
-        const rr = r < 0.012 ? 0.05 : r;
+        // Only a near-zero drag (i.e. a plain click) gets a default size;
+        // any real drag keeps its actual radius, however small.
+        const rr = r < 0.004 ? 0.03 : r;
         commit([
           ...annRef.current,
           { type: "circle", x: o.sx, y: o.sy, r: rr, color: colorRef.current, t: thicknessRef.current },
@@ -379,6 +385,13 @@ export default function ImageAnnotator({
   // Apply the current color/thickness to the selected annotation too.
   function pickColor(c: string) {
     setColor(c);
+    // Remember the choice against the right context (text vs. shape) so it
+    // sticks for future annotations of that kind.
+    const textContext =
+      tool === "text" ||
+      (selected != null && annRef.current[selected]?.type === "text");
+    if (textContext) setTextColor(c);
+    else setShapeColor(c);
     if (selected != null) {
       commit(annRef.current.map((a, i) => (i === selected ? { ...a, color: c } : a)));
     }
@@ -432,6 +445,7 @@ export default function ImageAnnotator({
             onClick={() => {
               setTool(t.id);
               if (t.id !== "select") setSelected(null);
+              setColor(t.id === "text" ? textColor : shapeColor);
             }}
             className={`rounded px-2.5 py-1 text-xs font-medium transition ${
               tool === t.id
