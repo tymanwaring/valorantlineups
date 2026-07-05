@@ -7,6 +7,7 @@ import { adminAuthEnabled } from "@/lib/auth";
 import { canManage } from "@/lib/session";
 import LogoutButton from "./components/LogoutButton";
 import AddLineupButton from "./components/AddLineupButton";
+import ProModeToggle from "./components/ProModeToggle";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -48,6 +49,7 @@ export default async function RootLayout({
               <span className="text-accent">brimmy</span>buddy
             </Link>
             <nav className="flex items-center gap-3 sm:gap-6 text-sm font-medium">
+              <ProModeToggle />
               <Link href="/" className="hover:text-accent transition-colors">
                 Maps
               </Link>

@@ -134,6 +134,19 @@ export type Lineup = {
 
 export type NewLineup = Omit<Lineup, "id" | "createdAt">;
 
+/**
+ * Indices of the "aim" steps (where to aim) within a steps[] array — used by
+ * pro/quick-reference views. Falls back to every step when none are aim-labeled
+ * so a lineup without conventional captions still shows something.
+ */
+export function aimStepIndices(steps: LineupStep[]): number[] {
+  const aim = steps
+    .map((s, i) => ({ s, i }))
+    .filter(({ s }) => /aim/i.test(s.caption))
+    .map(({ i }) => i);
+  return aim.length ? aim : steps.map((_, i) => i);
+}
+
 export const DEFAULT_STEP_CAPTIONS = ["Stand here", "Aim here", "Result"];
 
 /** Selectable precision levels for how exact a lineup's alignment must be. */

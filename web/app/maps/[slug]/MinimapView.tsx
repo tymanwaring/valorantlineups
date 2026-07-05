@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { getAgent, AGENTS } from "@/lib/agents";
 import { getMap } from "@/lib/maps";
 import type { Lineup } from "@/lib/types";
+import { aimStepIndices } from "@/lib/types";
+import { useProMode } from "@/lib/proMode";
 import StepCarousel from "@/app/components/StepCarousel";
 import ImageAnnotator from "@/app/components/ImageAnnotator";
 import { useAnnotatableSteps } from "@/app/components/useAnnotatableSteps";
@@ -11,6 +13,10 @@ import { SovaIndicator } from "@/app/components/SovaIndicator";
 import LineupTags from "@/app/components/LineupTags";
 import FavoriteStar from "@/app/components/FavoriteStar";
 import MinimapCallouts from "@/app/components/MinimapCallouts";
+import {
+  buildCardDartOverlays,
+  LineupOverlayBadges,
+} from "@/app/components/lineupBadges";
 import { attackerBottomRotation, rotatePoint } from "@/lib/callouts";
 
 type Side = "Attack" | "Defense";
@@ -90,13 +96,10 @@ export default function MinimapView({
     [shown],
   );
 
-  // Landing spots grouped by proximity. In "all" mode many agents' landings
-  // pile up, so merge with a wider radius to avoid stacked dots; a single-agent
-  // filter uses a tighter radius so distinct spots stay separate.
-  const landingClusters = useMemo(
-    () => clusterLandings(shown, agent === "all" ? 0.09 : 0.06),
-    [shown, agent],
-  );
+  // Landing spots grouped by proximity. Keep this radius tight so only landings
+  // that genuinely sit on top of each other merge — lineups thrown from the
+  // same spot but landing in different areas must stay as separate markers.
+  const landingClusters = useMemo(() => clusterLandings(shown, 0.03), [shown]);
 
   // Connector lines, de-duplicated when both start AND end are near-identical.
   const lines = useMemo(() => {
@@ -517,19 +520,25 @@ function MinimapDetail({
   });
   const steps = editor.steps;
   const hasSteps = steps.some((s) => s.image || s.caption.trim());
-  const [lightbox, setLightbox] = useState(false);
+  const { pro } = useProMode();
+  // Pro mode: quick reference shows just the aim step(s) in the inline preview.
+  const stepIdx = pro ? aimStepIndices(steps) : steps.map((_, i) => i);
+  const displaySteps = stepIdx.map((i) => steps[i]);
+  const { stepOverlays, placedBothDarts, isSova, isDouble } =
+    buildCardDartOverlays(lineup, "full");
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!lightbox || editor.annotating) return;
+    if (lightboxIdx === null || editor.annotating) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.stopPropagation();
-        setLightbox(false);
+        setLightboxIdx(null);
       }
     }
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [lightbox, editor.annotating]);
+  }, [lightboxIdx, editor.annotating]);
 
   return (
     <div
@@ -601,9 +610,9 @@ function MinimapDetail({
           )}
           {hasSteps ? (
             <StepCarousel
-              steps={steps}
+              steps={displaySteps}
               enableKeyboard
-              onImageClick={() => setLightbox(true)}
+              onImageClick={(idx) => setLightboxIdx(stepIdx[idx])}
             />
           ) : (
             <p className="text-sm text-foreground/50">
@@ -613,12 +622,12 @@ function MinimapDetail({
         </div>
       </div>
 
-      {lightbox && (
+      {lightboxIdx !== null && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 sm:p-8"
           onClick={(e) => {
             e.stopPropagation();
-            setLightbox(false);
+            setLightboxIdx(null);
           }}
         >
           <div
@@ -640,18 +649,34 @@ function MinimapDetail({
                 </button>
               )}
               <button
-                onClick={() => setLightbox(false)}
+                onClick={() => setLightboxIdx(null)}
                 aria-label="Close preview"
                 className="flex items-center gap-1 text-sm text-white/70 hover:text-white"
               >
                 ✕ Close
               </button>
             </div>
-            <StepCarousel
-              steps={steps}
-              enableKeyboard
-              enableZoom
-              onIndexChange={editor.setCurrent}
+            <div className="relative">
+              <StepCarousel
+                steps={steps}
+                overlays={stepOverlays}
+                enableKeyboard
+                enableZoom
+                initialIndex={lightboxIdx}
+                onIndexChange={editor.setCurrent}
+              />
+              <LineupOverlayBadges
+                lineup={lineup}
+                isSova={isSova}
+                isDouble={isDouble}
+                placedBothDarts={placedBothDarts}
+                reserveKebab={false}
+                big
+              />
+            </div>
+            <LineupTags
+              lineup={lineup}
+              className="mt-3 justify-center"
             />
           </div>
         </div>

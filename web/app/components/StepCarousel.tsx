@@ -15,10 +15,12 @@ export default function StepCarousel({
   overlays,
   onIndexChange,
   enableZoom = false,
+  initialIndex = 0,
 }: {
   steps: LineupStep[];
-  /** When set, clicking the image (not the controls) calls this. */
-  onImageClick?: () => void;
+  /** When set, clicking the image (not the controls) calls this with the
+   *  currently visible step index. */
+  onImageClick?: (index: number) => void;
   enableKeyboard?: boolean;
   /** Optional per-step overlay node shown above the caption (aligned to steps). */
   overlays?: (ReactNode | null)[];
@@ -26,9 +28,11 @@ export default function StepCarousel({
   onIndexChange?: (i: number) => void;
   /** Enable the hold-Shift magnifier over the image (full-screen previews). */
   enableZoom?: boolean;
+  /** Step to show first when mounted (e.g. the image a user clicked). */
+  initialIndex?: number;
 }) {
   const n = steps.length;
-  const [i, setI] = useState(0);
+  const [i, setI] = useState(initialIndex);
   const frameRef = useRef<HTMLDivElement>(null);
   const [lens, setLens] = useState<{
     cx: number;
@@ -71,8 +75,8 @@ export default function StepCarousel({
   const next = useCallback(() => setI((v) => (v + 1) % n), [n]);
 
   useEffect(() => {
-    setI(0);
-  }, [steps]);
+    setI(initialIndex);
+  }, [steps, initialIndex]);
 
   const current = Math.min(i, Math.max(0, n - 1));
   useEffect(() => {
@@ -124,7 +128,7 @@ export default function StepCarousel({
           className={`relative flex aspect-video items-center justify-center ${
             enableZoom && shiftHeld ? "cursor-zoom-in" : onImageClick ? "cursor-pointer" : ""
           }`}
-          onClick={onImageClick}
+          onClick={onImageClick ? () => onImageClick(current) : undefined}
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
           onMouseMove={trackLens}
