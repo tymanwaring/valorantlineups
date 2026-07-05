@@ -17,6 +17,7 @@ import LineupTags from "@/app/components/LineupTags";
 import FavoriteStar from "@/app/components/FavoriteStar";
 import { SovaIndicator } from "@/app/components/SovaIndicator";
 import StepCarousel from "@/app/components/StepCarousel";
+import AnnotatedImage from "@/app/components/AnnotatedImage";
 
 // Build a shareable deep link that opens a specific lineup on its map.
 export function lineupLink(l: Lineup): string {
@@ -25,7 +26,6 @@ export function lineupLink(l: Lineup): string {
 }
 
 type Side = "Attack" | "Defense";
-type View = Side | "all";
 
 // Site filter chips shown in the map header, derived per-map so three-site
 // maps (Haven, Lotus) expose a "C Site" chip too.
@@ -82,17 +82,15 @@ export default function MapClient({
   const params = useSearchParams();
   // Seed initial state from the URL so shared/bookmarked deep links restore the
   // exact view (map is already in the path; side/agent/site/search/lineup here).
-  const initialSide = (() => {
+  const initialAllSide: "all" | Side = (() => {
     const s = params.get("side");
-    return s === "Attack" || s === "Defense" || s === "all" ? s : null;
+    return s === "Attack" || s === "Defense" ? s : "all";
   })();
   // Default to the spatial minimap view; only fall to the list when the URL
   // explicitly asks for it (e.g. a shared list/lineup deep link).
   const [view, setView] = useState<"list" | "minimap">(
     params.get("view") === "list" ? "list" : "minimap",
   );
-  const [side, setSide] = useState<View | null>(initialSide);
-  const [switching, setSwitching] = useState(false);
   const [agent, setAgent] = useState<string>(params.get("agent") || "all");
   const [siteFilter, setSiteFilter] = useState<string>(
     params.get("site") || "all",
@@ -100,24 +98,24 @@ export default function MapClient({
   const [doubleShockOnly, setDoubleShockOnly] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [query, setQuery] = useState(params.get("q") || "");
-  // Side filter used only within the combined "all" view.
-  const [allSideFilter, setAllSideFilter] = useState<"all" | Side>("all");
+  // The list view always shows all lineups; Attack/Defense act as filters.
+  const [allSideFilter, setAllSideFilter] = useState<"all" | Side>(
+    initialAllSide,
+  );
   const [viewing, setViewing] = useState<Lineup | null>(null);
   const [editing, setEditing] = useState<Lineup | null>(null);
   const [deleting, setDeleting] = useState<Lineup | null>(null);
 
   const { favorites, isFavorite } = useFavorites();
 
-  // On first load, if the URL points at a specific lineup, open it (and make
-  // sure a side is selected so the list view it lives in is rendered).
+  // On first load, if the URL points at a specific lineup, open it in the list
+  // view (where the detail modal lives).
   useEffect(() => {
     const id = params.get("lineup");
     if (!id) return;
     const l = lineups.find((x) => x.id === id);
     if (!l) return;
-    // The detail modal lives in the list view, so force it when deep-linking.
     setView("list");
-    setSide((prev) => prev ?? l.side);
     setViewing(l);
     // Run once on mount only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -128,7 +126,7 @@ export default function MapClient({
   useEffect(() => {
     const p = new URLSearchParams();
     if (view === "list") p.set("view", "list");
-    if (side) p.set("side", side);
+    if (allSideFilter !== "all") p.set("side", allSideFilter);
     if (agent !== "all") p.set("agent", agent);
     if (siteFilter !== "all") p.set("site", siteFilter);
     if (query.trim()) p.set("q", query.trim());
@@ -139,38 +137,17 @@ export default function MapClient({
       "",
       qs ? `${window.location.pathname}?${qs}` : window.location.pathname,
     );
-  }, [view, side, agent, siteFilter, query, viewing]);
+  }, [view, allSideFilter, agent, siteFilter, query, viewing]);
 
-  function switchSide() {
-    if (switching || !side || side === "all") return;
-    setSwitching(true);
-    const other: Side = side === "Attack" ? "Defense" : "Attack";
-    // Swap content while the corroding disc fully covers the screen (~44%).
-    window.setTimeout(() => {
-      setSide(other);
-      setAgent("all");
-      setSiteFilter("all");
-      setDoubleShockOnly(false);
-      setFavoritesOnly(false);
-      setQuery("");
-      setAllSideFilter("all");
-    }, 440);
-    window.setTimeout(() => setSwitching(false), 1000);
-  }
-
-  const sideAccent = side === "Defense" ? "#38bdf8" : "#ff4655";
+  const sideAccent = allSideFilter === "Defense" ? "#38bdf8" : "#ff4655";
   const siteFilters = siteFiltersFor(mapSlug);
 
   const sideLineups = useMemo(
     () =>
-      !side
-        ? []
-        : side === "all"
-          ? allSideFilter === "all"
-            ? lineups
-            : lineups.filter((l) => l.side === allSideFilter)
-          : lineups.filter((l) => l.side === side),
-    [side, lineups, allSideFilter],
+      allSideFilter === "all"
+        ? lineups
+        : lineups.filter((l) => l.side === allSideFilter),
+    [lineups, allSideFilter],
   );
 
   // Lineups for the current side AND site filter — drives both the agent chips
@@ -205,20 +182,19 @@ export default function MapClient({
   // Remember the current map/side/agent so the header "+ Add Lineup" button can
   // prefill the Add form with whatever the user is currently viewing.
   useEffect(() => {
-    if (!side) return;
     try {
       sessionStorage.setItem(
         "addLineupContext",
         JSON.stringify({
           map: mapSlug,
-          side: side === "all" ? undefined : side,
+          side: allSideFilter === "all" ? undefined : allSideFilter,
           agent,
         }),
       );
     } catch {
       // Storage unavailable (private mode etc.) — non-critical.
     }
-  }, [mapSlug, side, agent]);
+  }, [mapSlug, allSideFilter, agent]);
 
   // Favorites present in the current side/site slice — drives whether to show
   // the Favorites chip at all.
@@ -275,9 +251,8 @@ export default function MapClient({
           </Link>
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
             <h1 className="font-display text-5xl tracking-widest">{mapName}</h1>
-            <div className="flex flex-wrap items-center gap-3 pb-1.5">
-              <ViewToggle view={view} onChange={setView} />
-              {view === "list" && side && (
+            <div className="flex flex-wrap items-center justify-end gap-3 pb-1.5">
+              {view === "list" && (
                 <div className="flex flex-wrap items-center gap-2">
                   {siteFilters.map((s) => (
                     <FilterChip
@@ -289,6 +264,7 @@ export default function MapClient({
                   ))}
                 </div>
               )}
+              <ViewToggle view={view} onChange={setView} />
             </div>
           </div>
         </div>
@@ -297,13 +273,18 @@ export default function MapClient({
       <div className="mx-auto max-w-6xl px-4 py-8">
         {view === "minimap" ? (
           <div>
-            <MinimapView mapSlug={mapSlug} lineups={lineups} />
+            <MinimapView
+              mapSlug={mapSlug}
+              lineups={lineups}
+              canEdit={canEdit}
+              onEdit={(l) => setEditing(l)}
+              onDelete={(l) => setDeleting(l)}
+            />
             <div className="mt-8 flex justify-center">
               <button
                 type="button"
                 onClick={() => {
                   setView("list");
-                  setSide("all");
                   setAgent("all");
                   setSiteFilter("all");
                   setDoubleShockOnly(false);
@@ -318,76 +299,33 @@ export default function MapClient({
               </button>
             </div>
           </div>
-        ) : !side ? (
-          <SideSelect
-            mapName={mapName}
-            mapImage={mapImage}
-            counts={{
-              Attack: lineups.filter((l) => l.side === "Attack").length,
-              Defense: lineups.filter((l) => l.side === "Defense").length,
-            }}
-            onChoose={(s) => {
-              setSide(s);
-              setAgent("all");
-              setSiteFilter("all");
-              setDoubleShockOnly(false);
-              setFavoritesOnly(false);
-              setQuery("");
-              setAllSideFilter("all");
-            }}
-          />
         ) : (
           <div className="relative">
-            {switching && <CorrodeTransition />}
-
             <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <span className="font-display text-2xl tracking-widest text-accent transition-colors duration-300">
-                  {side === "all" ? "All Lineups" : side}
+                  {allSideFilter === "all" ? "All Lineups" : allSideFilter}
                 </span>
                 <span className="text-foreground/40">{mapName}</span>
               </div>
-              {side === "all" ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  {(["Attack", "Defense"] as Side[]).map((s) => {
-                    const active = allSideFilter === s;
-                    return (
-                      <button
-                        key={s}
-                        onClick={() =>
-                          setAllSideFilter((prev) => (prev === s ? "all" : s))
-                        }
-                        className={`rounded-full border px-4 py-1.5 text-sm transition ${
-                          active
-                            ? "border-accent bg-accent text-white"
-                            : "border-panel-border bg-panel hover:border-accent/60"
-                        }`}
-                      >
-                        {s} only
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => {
-                      setSide("all");
-                      setAllSideFilter("all");
-                    }}
-                    className="rounded-full border border-panel-border bg-panel px-4 py-1.5 text-sm hover:border-accent/60"
-                  >
-                    View all
-                  </button>
-                  <button
-                    onClick={switchSide}
-                    disabled={switching}
-                    className="rounded-full border border-panel-border bg-panel px-4 py-1.5 text-sm hover:border-accent/60 disabled:opacity-60"
-                  >
-                    Switch to {side === "Attack" ? "Defense" : "Attack"}
-                  </button>
-                </div>
-              )}
+              <div className="flex overflow-hidden rounded-full border border-panel-border">
+                {(["all", "Attack", "Defense"] as const).map((s) => {
+                  const active = allSideFilter === s;
+                  return (
+                    <button
+                      key={s}
+                      onClick={() => setAllSideFilter(s)}
+                      className={`px-4 py-1.5 text-sm transition ${
+                        active
+                          ? "bg-accent text-white"
+                          : "bg-panel text-foreground/70 hover:bg-panel-border"
+                      }`}
+                    >
+                      {s === "all" ? "All" : s}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -441,8 +379,8 @@ export default function MapClient({
                   </p>
                 ) : (
                   <p className="text-foreground/60">
-                    No {side === "all" ? "" : `${side} `}lineups yet for{" "}
-                    {mapName}
+                    No {allSideFilter === "all" ? "" : `${allSideFilter} `}
+                    lineups yet for {mapName}
                     {siteFilter !== "all"
                       ? ` on ${siteFilters.find((s) => s.id === siteFilter)?.label}`
                       : ""}
@@ -451,9 +389,9 @@ export default function MapClient({
                 )}
                 {!query.trim() && canEdit && (
                   <Link
-                    href={`/admin?map=${mapSlug}${side ? `&side=${side}` : ""}${
-                      agent !== "all" ? `&agent=${agent}` : ""
-                    }`}
+                    href={`/admin?map=${mapSlug}${
+                      allSideFilter !== "all" ? `&side=${allSideFilter}` : ""
+                    }${agent !== "all" ? `&agent=${agent}` : ""}`}
                     className="mt-4 inline-block rounded bg-accent px-4 py-2 text-sm font-semibold text-white"
                   >
                     + Add the first lineup
@@ -478,184 +416,33 @@ export default function MapClient({
             {viewing && (
               <LineupModal lineup={viewing} onClose={() => setViewing(null)} />
             )}
-
-            {editing && (
-              <EditLineupModal
-                lineup={editing}
-                onClose={() => setEditing(null)}
-                onSaved={() => {
-                  setEditing(null);
-                  router.refresh();
-                }}
-              />
-            )}
-
-            {deleting && (
-              <ConfirmDeleteModal
-                lineup={deleting}
-                onClose={() => setDeleting(null)}
-                onDeleted={() => {
-                  setDeleting(null);
-                  router.refresh();
-                }}
-              />
-            )}
           </div>
         )}
       </div>
-    </div>
-  );
-}
 
-function SideSelect({
-  mapName,
-  mapImage,
-  counts,
-  onChoose,
-}: {
-  mapName: string;
-  mapImage: string;
-  counts: { Attack: number; Defense: number };
-  onChoose: (side: View) => void;
-}) {
-  const total = counts.Attack + counts.Defense;
-  return (
-    <div>
-      <div className="mb-5 flex flex-col items-center gap-4">
-        <button
-          type="button"
-          onClick={() => onChoose("all")}
-          className="w-full max-w-md rounded-xl border border-panel-border bg-panel px-8 py-4 text-lg font-semibold text-foreground transition hover:border-accent/60 hover:text-accent"
-        >
-          See all lineups
-          <span className="ml-2 text-base text-foreground/40">{total}</span>
-        </button>
-        <div className="flex w-full max-w-md items-center gap-3 text-foreground/40">
-          <span className="h-px flex-1 bg-panel-border" />
-          <span className="text-xs uppercase tracking-[0.3em]">or</span>
-          <span className="h-px flex-1 bg-panel-border" />
-        </div>
-      </div>
-
-      <div className="side-split h-[62vh] min-h-[460px] w-full rounded-xl border border-panel-border">
-      {/* Attack half */}
-      <button
-        type="button"
-        aria-label="Choose Attack"
-        onClick={() => onChoose("Attack")}
-        className="side-half side-attack group"
-      >
-        <div
-          className="side-bg"
-          style={{ backgroundImage: `url(${mapImage})` }}
+      {/* Edit/delete modals live at the root so they work from both the list
+          and the minimap views. */}
+      {editing && (
+        <EditLineupModal
+          lineup={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            router.refresh();
+          }}
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#ff4655]/55 via-[#8a1f2a]/40 to-black/70" />
-        <div className="relative z-10 pl-[8%] pr-[10%] text-left">
-          <p className="mb-2 text-sm font-semibold uppercase tracking-[0.3em] text-white/70">
-            Attacking
-          </p>
-          <h2 className="font-display text-6xl md:text-7xl tracking-widest text-white drop-shadow-[0_2px_20px_rgba(255,70,85,0.6)] transition-transform duration-500 group-hover:translate-x-2">
-            ATTACK
-          </h2>
-          <p className="mt-3 max-w-xs text-sm text-white/70">
-            Executes, smokes &amp; post-plant lineups.
-          </p>
-          <span className="mt-4 inline-block rounded-full bg-black/50 px-3 py-1 text-xs font-semibold text-white">
-            {counts.Attack} {counts.Attack === 1 ? "lineup" : "lineups"}
-          </span>
-        </div>
-      </button>
+      )}
 
-      {/* Defense half */}
-      <button
-        type="button"
-        aria-label="Choose Defense"
-        onClick={() => onChoose("Defense")}
-        className="side-half side-defense group"
-      >
-        <div
-          className="side-bg"
-          style={{ backgroundImage: `url(${mapImage})` }}
+      {deleting && (
+        <ConfirmDeleteModal
+          lineup={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={() => {
+            setDeleting(null);
+            router.refresh();
+          }}
         />
-        <div className="absolute inset-0 bg-gradient-to-l from-cyan-400/45 via-cyan-900/40 to-black/70" />
-        <div className="relative z-10 pr-[8%] pl-[10%] text-right">
-          <p className="mb-2 text-sm font-semibold uppercase tracking-[0.3em] text-white/70">
-            Defending
-          </p>
-          <h2 className="font-display text-6xl md:text-7xl tracking-widest text-white drop-shadow-[0_2px_20px_rgba(34,211,238,0.6)] transition-transform duration-500 group-hover:-translate-x-2">
-            DEFENSE
-          </h2>
-          <p className="mt-3 ml-auto max-w-xs text-sm text-white/70">
-            Retakes, holds &amp; anti-push setups.
-          </p>
-          <span className="mt-4 inline-block rounded-full bg-black/50 px-3 py-1 text-xs font-semibold text-white">
-            {counts.Defense} {counts.Defense === 1 ? "lineup" : "lineups"}
-          </span>
-        </div>
-      </button>
-
-      {/* Vignette + prompt */}
-      <div className="pointer-events-none absolute inset-0 z-[6] shadow-[inset_0_0_140px_60px_rgba(0,0,0,0.7)]" />
-      <div className="pointer-events-none absolute inset-x-0 top-5 z-[7] text-center">
-        <p className="font-display text-lg tracking-[0.35em] text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)]">
-          {mapName.toUpperCase()}
-        </p>
-        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.3em] text-white/80 drop-shadow-[0_1px_8px_rgba(0,0,0,0.95)]">
-          Choose your side
-        </p>
-      </div>
-      </div>
-    </div>
-  );
-}
-
-function CorrodeTransition() {
-  return (
-    <div className="corrode-overlay" aria-hidden>
-      {/* Turbulence filter that gives the disc a corroding, dissolving edge. */}
-      <svg width="0" height="0" className="absolute">
-        <defs>
-          <filter
-            id="corrode-filter"
-            x="-20%"
-            y="-20%"
-            width="140%"
-            height="140%"
-          >
-            <feTurbulence
-              type="fractalNoise"
-              baseFrequency="0.014 0.022"
-              numOctaves="3"
-              seed="7"
-              result="noise"
-            >
-              <animate
-                attributeName="baseFrequency"
-                dur="1s"
-                values="0.014 0.022; 0.024 0.032; 0.014 0.022"
-                repeatCount="1"
-              />
-            </feTurbulence>
-            <feDisplacementMap
-              in="SourceGraphic"
-              in2="noise"
-              scale="70"
-              xChannelSelector="R"
-              yChannelSelector="G"
-            />
-          </filter>
-        </defs>
-      </svg>
-
-      <div className="corrode-fill" />
-      <div className="corrode-core">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/Swiftplay.webp"
-          alt=""
-          className="h-24 w-24 object-contain md:h-28 md:w-28"
-        />
-      </div>
+      )}
     </div>
   );
 }
@@ -1325,11 +1112,12 @@ function LineupModal({
                   {s.caption || `Step ${i + 1}`}
                 </figcaption>
                 {s.image && (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
+                  <AnnotatedImage
                     src={s.image}
+                    annotations={s.annotations}
                     alt={s.caption || `Step ${i + 1}`}
-                    className="w-full rounded-lg border border-panel-border"
+                    fit="native"
+                    className="w-full overflow-hidden rounded-lg border border-panel-border"
                   />
                 )}
                 {detailOverlays[i] && (

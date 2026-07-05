@@ -1,4 +1,5 @@
 import type { LineupStep } from "./types";
+import { normalizeAnnotations } from "./types";
 import { saveUpload } from "./uploads";
 
 /**
@@ -23,8 +24,30 @@ export async function parseStepsFromForm(form: FormData): Promise<LineupStep[]> 
       image = existing;
     }
 
-    // Skip fully empty rows.
-    if (caption || image) steps.push({ caption, image });
+    let annotations;
+    const rawAnn =
+      form.get(`step-${i}-annotations`) ?? form.get(`step-${i}-circles`);
+    if (typeof rawAnn === "string" && rawAnn) {
+      try {
+        const parsed = JSON.parse(rawAnn);
+        // Legacy `circles` payloads lack a type; tag them as circles.
+        annotations = normalizeAnnotations(
+          Array.isArray(parsed)
+            ? parsed.map((p) =>
+                p && typeof p === "object" && !("type" in p)
+                  ? { ...p, type: "circle" }
+                  : p,
+              )
+            : parsed,
+        );
+      } catch {
+        annotations = undefined;
+      }
+    }
+
+    // Skip fully empty rows. Annotations are only meaningful with an image.
+    if (caption || image)
+      steps.push({ caption, image, annotations: image ? annotations : undefined });
     i++;
   }
   return steps;

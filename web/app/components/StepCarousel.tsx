@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { LineupStep } from "@/lib/types";
+import AnnotatedImage from "@/app/components/AnnotatedImage";
 
 export default function StepCarousel({
   steps,
@@ -56,11 +57,11 @@ export default function StepCarousel({
           onClick={onImageClick}
         >
           {step.image ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <AnnotatedImage
               src={step.image}
+              annotations={step.annotations}
               alt={step.caption || `Step ${current + 1}`}
-              className="h-full w-full object-contain"
+              className="h-full w-full"
             />
           ) : (
             <span className="px-6 text-center text-foreground/40">

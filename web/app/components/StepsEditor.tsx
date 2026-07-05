@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ClipboardEvent } from "react";
-import type { LineupStep } from "@/lib/types";
+import type { LineupStep, StepAnnotation } from "@/lib/types";
 import {
   DEFAULT_STEP_CAPTIONS,
   DOUBLE_SHOCK_STEP_CAPTIONS,
@@ -11,6 +11,7 @@ import {
   readClipboardImage,
   setInputFile,
 } from "@/lib/image-client";
+import ImageAnnotator from "@/app/components/ImageAnnotator";
 
 type Row = {
   id: number;
@@ -18,6 +19,7 @@ type Row = {
   existingImage?: string;
   previewUrl?: string;
   fileName?: string;
+  annotations?: StepAnnotation[];
 };
 
 let counter = 0;
@@ -34,6 +36,7 @@ function fromSteps(steps: LineupStep[]): Row[] {
     id: nextId(),
     caption: s.caption,
     existingImage: s.image,
+    annotations: s.annotations,
   }));
 }
 
@@ -47,7 +50,9 @@ export default function StepsEditor({
   const [rows, setRows] = useState<Row[]>(() => fromSteps(initialSteps ?? []));
   const [busyId, setBusyId] = useState<number | null>(null);
   const [activeId, setActiveId] = useState<number | null>(null);
-  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [annotate, setAnnotate] = useState<{ id: number; src: string } | null>(
+    null,
+  );
   const [errorId, setErrorId] = useState<{ id: number; msg: string } | null>(
     null,
   );
@@ -81,6 +86,7 @@ export default function StepsEditor({
         previewUrl: URL.createObjectURL(compressed),
         existingImage: undefined,
         fileName: compressed.name,
+        annotations: undefined,
       });
     } catch {
       setErrorId({ id, msg: "Could not process that image." });
@@ -203,20 +209,28 @@ export default function StepsEditor({
                 </button>
               </div>
 
-              <div className="h-16 w-24 shrink-0 overflow-hidden rounded border border-panel-border bg-black/40">
-                {thumb ? (
-                  // eslint-disable-next-line @next/next/no-img-element
+              {thumb ? (
+                <button
+                  type="button"
+                  onClick={() => setAnnotate({ id: row.id, src: thumb })}
+                  title="Open preview"
+                  className="group relative h-16 w-24 shrink-0 overflow-hidden rounded border border-panel-border bg-black/40"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={thumb}
                     alt=""
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-cover transition group-hover:opacity-80"
                   />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-[10px] text-foreground/30">
-                    no image
-                  </div>
-                )}
-              </div>
+                  <span className="absolute inset-0 flex items-center justify-center bg-black/0 text-[10px] font-semibold text-white opacity-0 transition group-hover:bg-black/40 group-hover:opacity-100">
+                    Preview
+                  </span>
+                </button>
+              ) : (
+                <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded border border-panel-border bg-black/40 text-[10px] text-foreground/30">
+                  no image
+                </div>
+              )}
 
               <div className="flex-1 space-y-2">
                 <input
@@ -261,12 +275,16 @@ export default function StepsEditor({
                   </button>
                   <button
                     type="button"
-                    onClick={() => thumb && setLightbox(thumb)}
+                    onClick={() =>
+                      thumb && setAnnotate({ id: row.id, src: thumb })
+                    }
                     disabled={!thumb}
-                    title="Preview image full size"
+                    title="Preview full size and draw circles"
                     className="shrink-0 rounded border border-panel-border px-2 py-1 text-xs text-foreground/80 hover:border-accent/60 hover:text-accent disabled:opacity-40"
                   >
-                    Preview
+                    {row.annotations?.length
+                      ? `Preview (${row.annotations.length})`
+                      : "Preview"}
                   </button>
                 </div>
                 {errorId?.id === row.id && (
@@ -277,6 +295,13 @@ export default function StepsEditor({
                     type="hidden"
                     name={`step-${i}-existing`}
                     value={row.existingImage}
+                  />
+                )}
+                {row.annotations && row.annotations.length > 0 && (
+                  <input
+                    type="hidden"
+                    name={`step-${i}-annotations`}
+                    value={JSON.stringify(row.annotations)}
                   />
                 )}
               </div>
@@ -302,27 +327,18 @@ export default function StepsEditor({
         + Add step
       </button>
 
-      {lightbox && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-4"
-          onClick={() => setLightbox(null)}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={lightbox}
-            alt="Step preview"
-            className="max-h-[92vh] max-w-[92vw] rounded-lg border border-panel-border object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
-          <button
-            type="button"
-            onClick={() => setLightbox(null)}
-            aria-label="Close preview"
-            className="absolute right-4 top-4 rounded-full bg-black/60 px-3 py-1 text-lg leading-none text-white hover:bg-black/80"
-          >
-            ✕
-          </button>
-        </div>
+      {annotate && (
+        <ImageAnnotator
+          src={annotate.src}
+          initialAnnotations={rows.find((r) => r.id === annotate.id)?.annotations}
+          onCancel={() => setAnnotate(null)}
+          onApply={(annotations) => {
+            update(annotate.id, {
+              annotations: annotations.length ? annotations : undefined,
+            });
+            setAnnotate(null);
+          }}
+        />
       )}
     </div>
   );

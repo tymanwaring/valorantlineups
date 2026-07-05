@@ -1,6 +1,74 @@
+/**
+ * Annotations drawn on a step image. All positions are normalized to the
+ * image's content box: x is a fraction (0-1) of width, y a fraction of height.
+ * Radii/sizes/thickness are fractions of the image WIDTH so shapes scale
+ * proportionally and stay round at any display size.
+ */
+type AnnotationBase = {
+  color: string;
+  /** Stroke thickness as a fraction of image width. */
+  t?: number;
+};
+export type CircleAnnotation = AnnotationBase & {
+  type: "circle";
+  x: number;
+  y: number;
+  r: number;
+};
+export type ArrowAnnotation = AnnotationBase & {
+  type: "arrow";
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+};
+/** Crosshair / aim marker at a precise point. r = arm half-length. */
+export type DotAnnotation = AnnotationBase & {
+  type: "dot";
+  x: number;
+  y: number;
+  r: number;
+};
+export type TextAnnotation = AnnotationBase & {
+  type: "text";
+  x: number;
+  y: number;
+  text: string;
+  /** Font size as a fraction of image width. */
+  size: number;
+};
+export type StepAnnotation =
+  | CircleAnnotation
+  | ArrowAnnotation
+  | DotAnnotation
+  | TextAnnotation;
+
+/** @deprecated legacy alias; circles are now CircleAnnotation. */
+export type StepCircle = CircleAnnotation;
+
+export const ANNOTATION_COLORS = ["#ff4655", "#ffd60a", "#38e0c8", "#ffffff"];
+
+/** Selectable stroke thicknesses (fraction of image width). */
+export const CIRCLE_THICKNESSES = [
+  { label: "S", value: 0.002 },
+  { label: "M", value: 0.004 },
+  { label: "L", value: 0.007 },
+] as const;
+
+/** Default stroke thickness used when an annotation has none. */
+export const DEFAULT_CIRCLE_THICKNESS = 0.004;
+
+/** Default font size for a text annotation (fraction of image width). */
+export const DEFAULT_TEXT_SIZE = 0.04;
+
+/** Default arm half-length for a dot/crosshair marker (fraction of width). */
+export const DEFAULT_DOT_RADIUS = 0.025;
+
 export type LineupStep = {
   caption: string;
   image?: string;
+  /** Optional annotations overlaid on the image. */
+  annotations?: StepAnnotation[];
 };
 
 export type Lineup = {
@@ -68,6 +136,110 @@ export const DOUBLE_SHOCK_STEP_CAPTIONS = [
   "Result",
 ];
 
+function clamp01(n: number): number {
+  return Math.min(1, Math.max(0, n));
+}
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, n));
+}
+
+function num(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+/** Validate/clamp annotations parsed from storage or form data. */
+export function normalizeAnnotations(raw: unknown): StepAnnotation[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: StepAnnotation[] = [];
+  for (const item of raw) {
+    const a = item as Record<string, unknown>;
+    const color = ANNOTATION_COLORS.includes(String(a?.color))
+      ? String(a.color)
+      : ANNOTATION_COLORS[0];
+    const rawT = num(a?.t);
+    const t = rawT != null ? clamp(rawT, 0.0005, 0.05) : undefined;
+
+    switch (a?.type) {
+      case "circle": {
+        const x = num(a.x);
+        const y = num(a.y);
+        const r = num(a.r);
+        if (x == null || y == null || r == null) break;
+        out.push({
+          type: "circle",
+          x: clamp01(x),
+          y: clamp01(y),
+          r: clamp(r, 0.005, 1),
+          color,
+          t,
+        });
+        break;
+      }
+      case "arrow": {
+        const x1 = num(a.x1);
+        const y1 = num(a.y1);
+        const x2 = num(a.x2);
+        const y2 = num(a.y2);
+        if (x1 == null || y1 == null || x2 == null || y2 == null) break;
+        out.push({
+          type: "arrow",
+          x1: clamp01(x1),
+          y1: clamp01(y1),
+          x2: clamp01(x2),
+          y2: clamp01(y2),
+          color,
+          t,
+        });
+        break;
+      }
+      case "dot": {
+        const x = num(a.x);
+        const y = num(a.y);
+        if (x == null || y == null) break;
+        const r = num(a.r);
+        out.push({
+          type: "dot",
+          x: clamp01(x),
+          y: clamp01(y),
+          r: clamp(r ?? DEFAULT_DOT_RADIUS, 0.005, 0.25),
+          color,
+          t,
+        });
+        break;
+      }
+      case "text": {
+        const x = num(a.x);
+        const y = num(a.y);
+        const text = typeof a.text === "string" ? a.text.trim() : "";
+        if (x == null || y == null || !text) break;
+        const size = num(a.size);
+        out.push({
+          type: "text",
+          x: clamp01(x),
+          y: clamp01(y),
+          text: text.slice(0, 140),
+          size: clamp(size ?? DEFAULT_TEXT_SIZE, 0.001, 0.25),
+          color,
+          t,
+        });
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  return out.length ? out : undefined;
+}
+
+/** Migrate legacy `circles` arrays (pre-annotation model) to annotations. */
+function circlesToAnnotations(raw: unknown): StepAnnotation[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  return normalizeAnnotations(
+    raw.map((c) => ({ ...(c as Record<string, unknown>), type: "circle" })),
+  );
+}
+
 type Legacyish = {
   steps?: unknown;
   standImage?: string | null;
@@ -83,10 +255,18 @@ export function normalizeSteps(row: Legacyish): LineupStep[] {
   if (Array.isArray(row.steps)) {
     return (row.steps as unknown[])
       .map((s) => {
-        const step = s as { caption?: unknown; image?: unknown };
+        const step = s as {
+          caption?: unknown;
+          image?: unknown;
+          annotations?: unknown;
+          circles?: unknown;
+        };
         return {
           caption: typeof step.caption === "string" ? step.caption : "",
           image: typeof step.image === "string" && step.image ? step.image : undefined,
+          annotations:
+            normalizeAnnotations(step.annotations) ??
+            circlesToAnnotations(step.circles),
         };
       })
       .filter((s) => s.caption.trim() !== "" || s.image);

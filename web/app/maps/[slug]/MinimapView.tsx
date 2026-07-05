@@ -12,17 +12,24 @@ import MinimapCallouts from "@/app/components/MinimapCallouts";
 import { attackerBottomRotation, rotatePoint } from "@/lib/callouts";
 
 type Side = "Attack" | "Defense";
+type SideFilter = Side | "all";
 
 // Spatial "where is it thrown from" view for a single map. Reads only the
 // lineups already scoped to this map by the server component.
 export default function MinimapView({
   mapSlug,
   lineups,
+  canEdit = false,
+  onEdit,
+  onDelete,
 }: {
   mapSlug: string;
   lineups: Lineup[];
+  canEdit?: boolean;
+  onEdit?: (l: Lineup) => void;
+  onDelete?: (l: Lineup) => void;
 }) {
-  const [side, setSide] = useState<Side>("Attack");
+  const [side, setSide] = useState<SideFilter>("all");
   const [agent, setAgent] = useState<string>("all");
   const [selected, setSelected] = useState<Lineup | null>(null);
   const [cluster, setCluster] = useState<Lineup[] | null>(null);
@@ -34,7 +41,10 @@ export default function MinimapView({
   const placed = useMemo(
     () =>
       lineups.filter(
-        (l) => l.side === side && l.fromX != null && l.fromY != null,
+        (l) =>
+          (side === "all" || l.side === side) &&
+          l.fromX != null &&
+          l.fromY != null,
       ),
     [lineups, side],
   );
@@ -102,6 +112,7 @@ export default function MinimapView({
   }, [shown]);
 
   const sideAccent = side === "Defense" ? "#38bdf8" : "#ff4655";
+  const sideLabel = side === "all" ? "All" : side;
   const rot = attackerBottomRotation(mapSlug);
 
   return (
@@ -109,13 +120,23 @@ export default function MinimapView({
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="font-display text-2xl tracking-widest text-accent transition-colors">
-            {side}
+            {sideLabel}
           </span>
           <span className="text-foreground/40">{map?.name ?? mapSlug}</span>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            onClick={() => setShowCallouts((v) => !v)}
+            className={`rounded-md border px-3 py-2 text-sm transition ${
+              showCallouts
+                ? "border-accent bg-accent text-white"
+                : "border-panel-border bg-panel text-foreground/70 hover:bg-panel-border"
+            }`}
+          >
+            Callouts
+          </button>
           <div className="flex overflow-hidden rounded-md border border-panel-border">
-            {(["Attack", "Defense"] as Side[]).map((s) => (
+            {(["all", "Attack", "Defense"] as SideFilter[]).map((s) => (
               <button
                 key={s}
                 onClick={() => {
@@ -128,20 +149,10 @@ export default function MinimapView({
                     : "bg-panel text-foreground/70 hover:bg-panel-border"
                 }`}
               >
-                {s}
+                {s === "all" ? "All" : s}
               </button>
             ))}
           </div>
-          <button
-            onClick={() => setShowCallouts((v) => !v)}
-            className={`rounded-md border px-3 py-2 text-sm transition ${
-              showCallouts
-                ? "border-accent bg-accent text-white"
-                : "border-panel-border bg-panel text-foreground/70 hover:bg-panel-border"
-            }`}
-          >
-            Callouts
-          </button>
         </div>
       </div>
 
@@ -305,11 +316,36 @@ export default function MinimapView({
             setSelected(l);
           }}
           onClose={() => setCluster(null)}
+          canEdit={canEdit}
+          onEdit={(l) => {
+            setCluster(null);
+            onEdit?.(l);
+          }}
         />
       )}
 
       {selected && (
-        <MinimapDetail lineup={selected} onClose={() => setSelected(null)} />
+        <MinimapDetail
+          lineup={selected}
+          onClose={() => setSelected(null)}
+          canEdit={canEdit}
+          onEdit={
+            onEdit
+              ? (l) => {
+                  setSelected(null);
+                  onEdit(l);
+                }
+              : undefined
+          }
+          onDelete={
+            onDelete
+              ? (l) => {
+                  setSelected(null);
+                  onDelete(l);
+                }
+              : undefined
+          }
+        />
       )}
     </div>
   );
@@ -369,10 +405,14 @@ function ClusterModal({
   lineups,
   onPick,
   onClose,
+  canEdit = false,
+  onEdit,
 }: {
   lineups: Lineup[];
   onPick: (l: Lineup) => void;
   onClose: () => void;
+  canEdit?: boolean;
+  onEdit?: (l: Lineup) => void;
 }) {
   return (
     <div
@@ -430,6 +470,16 @@ function ClusterModal({
                     )}
                   </span>
                 </button>
+                {canEdit && onEdit && (
+                  <button
+                    onClick={() => onEdit(l)}
+                    className="rounded p-1.5 text-foreground/60 hover:text-accent"
+                    aria-label="Edit lineup"
+                    title="Edit lineup"
+                  >
+                    ✎
+                  </button>
+                )}
                 <FavoriteStar id={l.id} size="sm" />
               </div>
             );
@@ -443,9 +493,15 @@ function ClusterModal({
 function MinimapDetail({
   lineup,
   onClose,
+  canEdit = false,
+  onEdit,
+  onDelete,
 }: {
   lineup: Lineup;
   onClose: () => void;
+  canEdit?: boolean;
+  onEdit?: (l: Lineup) => void;
+  onDelete?: (l: Lineup) => void;
 }) {
   const agent = getAgent(lineup.agentSlug);
   const steps = lineup.steps ?? [];
@@ -472,6 +528,26 @@ function MinimapDetail({
             <h2 className="mt-1 text-xl font-bold">{lineup.title}</h2>
           </div>
           <div className="flex items-center gap-1">
+            {canEdit && onEdit && (
+              <button
+                onClick={() => onEdit(lineup)}
+                className="rounded px-2 py-1 text-sm text-foreground/70 hover:text-accent"
+                aria-label="Edit lineup"
+                title="Edit lineup"
+              >
+                ✎ Edit
+              </button>
+            )}
+            {canEdit && onDelete && (
+              <button
+                onClick={() => onDelete(lineup)}
+                className="rounded px-2 py-1 text-sm text-foreground/70 hover:text-accent"
+                aria-label="Delete lineup"
+                title="Delete lineup"
+              >
+                Delete
+              </button>
+            )}
             <FavoriteStar id={lineup.id} size="sm" />
             <button
               onClick={onClose}
