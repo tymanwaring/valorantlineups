@@ -4,6 +4,7 @@ import { MAPS, type MapInfo } from "@/lib/maps";
 import { getLineups } from "@/lib/store";
 import { getRotation } from "@/lib/rotation";
 import { canManage } from "@/lib/session";
+import MapCardMenu from "@/app/components/MapCardMenu";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,7 @@ export default async function Home() {
         maps={inRotation}
         counts={counts}
         inRotation
+        canEdit={canEdit}
       />
 
       {outRotation.length > 0 && (
@@ -57,6 +59,7 @@ export default async function Home() {
           maps={outRotation}
           counts={counts}
           inRotation={false}
+          canEdit={canEdit}
         />
       )}
     </div>
@@ -68,11 +71,13 @@ function Section({
   maps,
   counts,
   inRotation,
+  canEdit,
 }: {
   title: string;
   maps: MapInfo[];
   counts: Map<string, number>;
   inRotation: boolean;
+  canEdit: boolean;
 }) {
   if (maps.length === 0) return null;
   return (
@@ -91,6 +96,7 @@ function Section({
             map={map}
             count={counts.get(map.slug) ?? 0}
             inRotation={inRotation}
+            canEdit={canEdit}
           />
         ))}
       </div>
@@ -102,14 +108,15 @@ function MapCard({
   map,
   count,
   inRotation,
+  canEdit,
 }: {
   map: MapInfo;
   count: number;
   inRotation: boolean;
+  canEdit: boolean;
 }) {
   return (
-    <Link
-      href={`/maps/${map.slug}`}
+    <div
       className={`group relative overflow-hidden rounded-lg border bg-panel aspect-video ${
         inRotation ? "border-panel-border" : "border-panel-border/50"
       }`}
@@ -145,6 +152,16 @@ function MapCard({
           {count} {count === 1 ? "lineup" : "lineups"}
         </span>
       </div>
-    </Link>
+
+      {/* Stretched link covers the whole card for navigation; interactive
+          overlays (the menu) sit above it with a higher z-index. */}
+      <Link
+        href={`/maps/${map.slug}`}
+        aria-label={`Open ${map.name}`}
+        className="absolute inset-0 z-[1]"
+      />
+
+      {canEdit && <MapCardMenu slug={map.slug} inRotation={inRotation} />}
+    </div>
   );
 }
