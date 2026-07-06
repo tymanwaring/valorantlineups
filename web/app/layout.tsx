@@ -5,9 +5,7 @@ import Link from "next/link";
 import "./globals.css";
 import { adminAuthEnabled } from "@/lib/auth";
 import { canManage } from "@/lib/session";
-import LogoutButton from "./components/LogoutButton";
-import AddLineupButton from "./components/AddLineupButton";
-import ProModeToggle from "./components/ProModeToggle";
+import HeaderNav from "./components/HeaderNav";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -56,36 +54,7 @@ export default async function RootLayout({
             >
               <span className="text-accent">brimmy</span>buddy
             </Link>
-            <nav className="flex items-center gap-3 sm:gap-6 text-sm font-medium">
-              <ProModeToggle />
-              <Link href="/" className="hover:text-accent transition-colors">
-                Maps
-              </Link>
-              <Link
-                href="/favorites"
-                className="hover:text-accent transition-colors"
-              >
-                Favorites
-              </Link>
-              <Link
-                href="/recent"
-                className="hover:text-accent transition-colors"
-              >
-                Recent
-              </Link>
-              {manage && (
-                <Link
-                  href="/admin/rotation"
-                  className="hover:text-accent transition-colors"
-                >
-                  Rotation
-                </Link>
-              )}
-              {manage && (
-                <AddLineupButton className="rounded bg-accent px-3 py-1.5 text-white hover:opacity-90 transition" />
-              )}
-              {loggedIn && <LogoutButton />}
-            </nav>
+            <HeaderNav manage={manage} loggedIn={loggedIn} />
           </div>
         </header>
         <main className="flex-1">{children}</main>

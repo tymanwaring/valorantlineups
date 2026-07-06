@@ -11,6 +11,7 @@ import { lineupLink } from "@/lib/lineup-link";
 import { useFavorites } from "@/lib/favorites";
 import { recordView } from "@/lib/recent";
 import { useProMode } from "@/lib/proMode";
+import { useAgentFocus } from "@/lib/agentFocus";
 import { proStepIndices } from "@/lib/types";
 import StepsEditor from "@/app/components/StepsEditor";
 import SovaFields from "@/app/components/SovaFields";
@@ -118,6 +119,8 @@ export default function MapClient({
   const [deleting, setDeleting] = useState<Lineup | null>(null);
 
   const { favorites, isFavorite } = useFavorites();
+  const { focus, ready: focusReady } = useAgentFocus();
+  const agentFocused = focusReady && focus !== "all";
 
   // On first load, if the URL points at a specific lineup, open it in the list
   // view (where the detail modal lives).
@@ -153,12 +156,19 @@ export default function MapClient({
   const sideAccent = allSideFilter === "Defense" ? "#38bdf8" : "#ff4655";
   const siteFilters = siteFiltersFor(mapSlug);
 
+  // Scope everything to the focused agent (global "main agent" preference) so
+  // counts, chips, and the grid all reflect just that agent.
+  const focusedLineups = useMemo(
+    () => (agentFocused ? lineups.filter((l) => l.agentSlug === focus) : lineups),
+    [lineups, agentFocused, focus],
+  );
+
   const sideLineups = useMemo(
     () =>
       allSideFilter === "all"
-        ? lineups
-        : lineups.filter((l) => l.side === allSideFilter),
-    [lineups, allSideFilter],
+        ? focusedLineups
+        : focusedLineups.filter((l) => l.side === allSideFilter),
+    [focusedLineups, allSideFilter],
   );
 
   // Lineups for the current side AND site filter — drives both the agent chips
@@ -343,20 +353,24 @@ export default function MapClient({
 
             <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
-                <FilterChip
-                  label="All"
-                  active={agent === "all"}
-                  onClick={() => setAgent("all")}
-                />
-                {agentsWithLineups.map((a) => (
-                  <FilterChip
-                    key={a.slug}
-                    label={a.name}
-                    active={agent === a.slug}
-                    onClick={() => setAgent(a.slug)}
-                  />
-                ))}
-                {(hasDoubleShock || hasFavoritesHere) && (
+                {!agentFocused && (
+                  <>
+                    <FilterChip
+                      label="All"
+                      active={agent === "all"}
+                      onClick={() => setAgent("all")}
+                    />
+                    {agentsWithLineups.map((a) => (
+                      <FilterChip
+                        key={a.slug}
+                        label={a.name}
+                        active={agent === a.slug}
+                        onClick={() => setAgent(a.slug)}
+                      />
+                    ))}
+                  </>
+                )}
+                {!agentFocused && (hasDoubleShock || hasFavoritesHere) && (
                   <span className="mx-1 h-5 w-px self-center bg-panel-border" />
                 )}
                 {hasDoubleShock && (

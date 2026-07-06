@@ -15,6 +15,7 @@ import { SovaIndicator } from "@/app/components/SovaIndicator";
 import LineupTags from "@/app/components/LineupTags";
 import FavoriteStar from "@/app/components/FavoriteStar";
 import { useFavorites } from "@/lib/favorites";
+import { useAgentFocus } from "@/lib/agentFocus";
 import MinimapCallouts from "@/app/components/MinimapCallouts";
 import {
   buildCardDartOverlays,
@@ -104,6 +105,7 @@ export default function MinimapView({
 
   const { favorites } = useFavorites();
   const favSet = useMemo(() => new Set(favorites), [favorites]);
+  const { focus, ready: focusReady } = useAgentFocus();
   const sites = useMemo(() => getMapSites(mapSlug), [mapSlug]);
   const activeFilters =
     (precisionFilter !== "all" ? 1 : 0) +
@@ -148,6 +150,7 @@ export default function MinimapView({
 
   // Lineups on this side that have a placed throw position, then narrowed by any
   // active precision filter (so agent counts + markers all stay consistent).
+  const agentFocused = focusReady && focus !== "all";
   const placed = useMemo(
     () =>
       lineups.filter(
@@ -157,9 +160,10 @@ export default function MinimapView({
           l.fromY != null &&
           (precisionFilter === "all" || l.precision === precisionFilter) &&
           (siteFilter === "all" || l.site === siteFilter) &&
-          (!favoritesOnly || favSet.has(l.id)),
+          (!favoritesOnly || favSet.has(l.id)) &&
+          (!agentFocused || l.agentSlug === focus),
       ),
-    [lineups, side, precisionFilter, siteFilter, favoritesOnly, favSet],
+    [lineups, side, precisionFilter, siteFilter, favoritesOnly, favSet, agentFocused, focus],
   );
 
   const counts = useMemo(() => {
@@ -411,7 +415,9 @@ export default function MinimapView({
         </div>
       </div>
 
-      {/* Agent picker */}
+      {/* Agent picker — hidden when a global agent focus is active (the view is
+          already locked to that agent). */}
+      {!agentFocused && (
       <div className="mb-5 flex flex-wrap items-center gap-2">
         <button
           onClick={() => setAgent("all")}
@@ -453,6 +459,7 @@ export default function MinimapView({
           );
         })}
       </div>
+      )}
 
       <div className="mx-auto max-w-3xl">
         <div className="relative aspect-square w-full overflow-hidden rounded-xl border border-panel-border bg-black/40">

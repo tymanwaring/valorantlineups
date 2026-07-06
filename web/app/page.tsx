@@ -5,6 +5,7 @@ import { getLineups } from "@/lib/store";
 import { getRotation } from "@/lib/rotation";
 import { canManage } from "@/lib/session";
 import MapCardMenu from "@/app/components/MapCardMenu";
+import MapCardCount from "@/app/components/MapCardCount";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +17,12 @@ export default async function Home() {
   ]);
 
   const counts = new Map<string, number>();
+  const agentCounts = new Map<string, Record<string, number>>();
   for (const l of lineups) {
     counts.set(l.mapSlug, (counts.get(l.mapSlug) ?? 0) + 1);
+    const rec = agentCounts.get(l.mapSlug) ?? {};
+    rec[l.agentSlug] = (rec[l.agentSlug] ?? 0) + 1;
+    agentCounts.set(l.mapSlug, rec);
   }
 
   const rotationSet = new Set(rotation);
@@ -49,6 +54,7 @@ export default async function Home() {
         title="In Rotation"
         maps={inRotation}
         counts={counts}
+        agentCounts={agentCounts}
         inRotation
         canEdit={canEdit}
       />
@@ -58,6 +64,7 @@ export default async function Home() {
           title="Out of Rotation"
           maps={outRotation}
           counts={counts}
+          agentCounts={agentCounts}
           inRotation={false}
           canEdit={canEdit}
         />
@@ -70,12 +77,14 @@ function Section({
   title,
   maps,
   counts,
+  agentCounts,
   inRotation,
   canEdit,
 }: {
   title: string;
   maps: MapInfo[];
   counts: Map<string, number>;
+  agentCounts: Map<string, Record<string, number>>;
   inRotation: boolean;
   canEdit: boolean;
 }) {
@@ -95,6 +104,7 @@ function Section({
             key={map.slug}
             map={map}
             count={counts.get(map.slug) ?? 0}
+            byAgent={agentCounts.get(map.slug) ?? {}}
             inRotation={inRotation}
             canEdit={canEdit}
           />
@@ -107,11 +117,13 @@ function Section({
 function MapCard({
   map,
   count,
+  byAgent,
   inRotation,
   canEdit,
 }: {
   map: MapInfo;
   count: number;
+  byAgent: Record<string, number>;
   inRotation: boolean;
   canEdit: boolean;
 }) {
@@ -148,9 +160,7 @@ function MapCard({
         <span className="font-display text-2xl tracking-widest drop-shadow">
           {map.name}
         </span>
-        <span className="rounded-full bg-black/60 px-2.5 py-0.5 text-xs font-semibold text-white/90">
-          {count} {count === 1 ? "lineup" : "lineups"}
-        </span>
+        <MapCardCount total={count} byAgent={byAgent} />
       </div>
 
       {/* Stretched link covers the whole card for navigation; interactive
