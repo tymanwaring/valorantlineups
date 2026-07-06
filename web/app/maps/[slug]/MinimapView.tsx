@@ -45,7 +45,7 @@ export default function MinimapView({
   onDelete?: (l: Lineup) => void;
   onRefresh?: () => void;
 }) {
-  const [side, setSide] = useState<SideFilter>("all");
+  const [side, setSide] = useState<SideFilter>("Attack");
   const [agent, setAgent] = useState<string>("all");
   const [selected, setSelected] = useState<Lineup | null>(null);
   const [cluster, setCluster] = useState<Lineup[] | null>(null);
