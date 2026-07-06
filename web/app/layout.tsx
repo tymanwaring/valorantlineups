@@ -20,7 +20,15 @@ const valorant = localFont({
   display: "swap",
 });
 
+// Base URL so relative OpenGraph/Twitter image paths resolve to absolute URLs
+// when links are unfurled (Discord, etc.). Falls back to localhost in dev.
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+  "http://localhost:3000";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: "brimmybuddy",
   description: "Browse Valorant lineups by map and agent.",
 };
@@ -58,6 +66,12 @@ export default async function RootLayout({
                 className="hover:text-accent transition-colors"
               >
                 Favorites
+              </Link>
+              <Link
+                href="/recent"
+                className="hover:text-accent transition-colors"
+              >
+                Recent
               </Link>
               {manage && (
                 <Link

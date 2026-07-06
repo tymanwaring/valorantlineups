@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getAgent, AGENTS } from "@/lib/agents";
-import { getMap } from "@/lib/maps";
+import { getMap, getMapSites } from "@/lib/maps";
 import type { Lineup } from "@/lib/types";
-import { proStepIndices } from "@/lib/types";
+import { proStepIndices, PRECISION_LEVELS } from "@/lib/types";
+import { lineupLink } from "@/lib/lineup-link";
+import { recordView } from "@/lib/recent";
 import { useProMode } from "@/lib/proMode";
 import StepCarousel from "@/app/components/StepCarousel";
 import ImageAnnotator from "@/app/components/ImageAnnotator";
@@ -12,6 +14,7 @@ import { useAnnotatableSteps } from "@/app/components/useAnnotatableSteps";
 import { SovaIndicator } from "@/app/components/SovaIndicator";
 import LineupTags from "@/app/components/LineupTags";
 import FavoriteStar from "@/app/components/FavoriteStar";
+import { useFavorites } from "@/lib/favorites";
 import MinimapCallouts from "@/app/components/MinimapCallouts";
 import {
   buildCardDartOverlays,
@@ -22,6 +25,49 @@ import {
   rotatePoint,
   type Callout,
 } from "@/lib/callouts";
+
+// Throw-marker ring color by precision level (matches the tag colors):
+// High = red, Medium = amber, Low = green; neutral gray when unset/mixed.
+function precisionColor(precision?: string): string {
+  switch (precision) {
+    case "High":
+      return "#ff4655";
+    case "Medium":
+      return "#fbbf24";
+    case "Low":
+      return "#34d399";
+    default:
+      return "#94a3b8";
+  }
+}
+
+// Quiet neutral ring for markers with no precision set (so we don't imply a
+// level). Deliberately dim — precision is conveyed only by green/yellow/red.
+const NEUTRAL_RING = "#3a4150";
+
+// CSS `background` for a marker's precision ring. Only lineups that actually have
+// a precision contribute colored arcs; unset ones are ignored (never a gray
+// segment). A single/uniform precision is a solid color; a mix becomes a
+// conic-gradient of proportional arcs. All-unset falls back to the neutral ring.
+function precisionRing(items: Lineup[]): string {
+  const order = ["High", "Medium", "Low"];
+  const segs = order
+    .map((p) => ({ p, c: items.filter((l) => l.precision === p).length }))
+    .filter((g) => g.c > 0);
+
+  if (segs.length === 0) return NEUTRAL_RING;
+  if (segs.length === 1) return precisionColor(segs[0].p);
+
+  const total = segs.reduce((sum, g) => sum + g.c, 0);
+  let acc = 0;
+  const stops = segs.map((s) => {
+    const start = (acc / total) * 360;
+    acc += s.c;
+    const end = (acc / total) * 360;
+    return `${precisionColor(s.p)} ${start}deg ${end}deg`;
+  });
+  return `conic-gradient(${stops.join(", ")})`;
+}
 
 type Side = "Attack" | "Defense";
 type SideFilter = Side | "all";
@@ -50,19 +96,48 @@ export default function MinimapView({
   const [selected, setSelected] = useState<Lineup | null>(null);
   const [cluster, setCluster] = useState<Lineup[] | null>(null);
   const [showCallouts, setShowCallouts] = useState(true);
+  const [precisionFilter, setPrecisionFilter] = useState<string>("all");
+  const [siteFilter, setSiteFilter] = useState<string>("all");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
+
+  const { favorites } = useFavorites();
+  const favSet = useMemo(() => new Set(favorites), [favorites]);
+  const sites = useMemo(() => getMapSites(mapSlug), [mapSlug]);
+  const activeFilters =
+    (precisionFilter !== "all" ? 1 : 0) +
+    (siteFilter !== "all" ? 1 : 0) +
+    (favoritesOnly ? 1 : 0);
 
   const map = getMap(mapSlug);
 
-  // Lineups on this side that have a placed throw position.
+  // Close the filter popover when clicking outside it.
+  useEffect(() => {
+    if (!filterOpen) return;
+    function onDocClick(e: MouseEvent) {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setFilterOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [filterOpen]);
+
+  // Lineups on this side that have a placed throw position, then narrowed by any
+  // active precision filter (so agent counts + markers all stay consistent).
   const placed = useMemo(
     () =>
       lineups.filter(
         (l) =>
           (side === "all" || l.side === side) &&
           l.fromX != null &&
-          l.fromY != null,
+          l.fromY != null &&
+          (precisionFilter === "all" || l.precision === precisionFilter) &&
+          (siteFilter === "all" || l.site === siteFilter) &&
+          (!favoritesOnly || favSet.has(l.id)),
       ),
-    [lineups, side],
+    [lineups, side, precisionFilter, siteFilter, favoritesOnly, favSet],
   );
 
   const counts = useMemo(() => {
@@ -148,6 +223,151 @@ export default function MinimapView({
           >
             Callouts
           </button>
+
+          {/* Filters popover (precision + favorites). Tucked behind an icon so
+              it stays out of the way until needed. */}
+          <div ref={filterRef} className="relative">
+            <button
+              onClick={() => setFilterOpen((o) => !o)}
+              aria-label="Filters"
+              title="Filters"
+              className={`relative flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition ${
+                activeFilters > 0
+                  ? "border-accent bg-accent text-white"
+                  : "border-panel-border bg-panel text-foreground/70 hover:bg-panel-border"
+              }`}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
+              </svg>
+              <span className="hidden sm:inline">Filters</span>
+              {activeFilters > 0 && (
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-accent">
+                  {activeFilters}
+                </span>
+              )}
+            </button>
+            {filterOpen && (
+              <div className="absolute right-0 z-20 mt-2 w-64 overflow-hidden rounded-lg border border-panel-border bg-panel shadow-xl">
+                <div className="flex items-center justify-between border-b border-panel-border px-4 py-2.5">
+                  <span className="text-sm font-semibold">Filters</span>
+                  <button
+                    onClick={() => {
+                      setPrecisionFilter("all");
+                      setSiteFilter("all");
+                      setFavoritesOnly(false);
+                    }}
+                    disabled={activeFilters === 0}
+                    className="text-xs text-foreground/50 transition hover:text-accent disabled:opacity-40"
+                  >
+                    Reset
+                  </button>
+                </div>
+
+                <div className="px-4 py-3">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground/50">
+                    Site
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(["all", ...sites] as string[]).map((s) => {
+                      const on = siteFilter === s;
+                      return (
+                        <button
+                          key={s}
+                          onClick={() => setSiteFilter(s)}
+                          className={`rounded-full border px-2.5 py-1 text-xs transition ${
+                            on
+                              ? "border-accent bg-accent text-white"
+                              : "border-panel-border text-foreground/70 hover:bg-panel-border"
+                          }`}
+                        >
+                          {s === "all" ? "All" : s === "Mid" ? "Mid" : `${s} Site`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="border-t border-panel-border px-4 py-3">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground/50">
+                    Precision
+                  </div>
+                  <div className="grid grid-cols-4 overflow-hidden rounded-md border border-panel-border text-xs">
+                    {(["all", ...PRECISION_LEVELS] as string[]).map((p, idx) => {
+                      const on = precisionFilter === p;
+                      const label =
+                        p === "all" ? "All" : p === "Medium" ? "Med" : p;
+                      return (
+                        <button
+                          key={p}
+                          onClick={() => setPrecisionFilter(p)}
+                          className={`flex items-center justify-center gap-1 px-1 py-1.5 transition ${
+                            idx > 0 ? "border-l border-panel-border" : ""
+                          } ${
+                            on
+                              ? "bg-accent text-white"
+                              : "text-foreground/70 hover:bg-panel-border"
+                          }`}
+                        >
+                          {p !== "all" && (
+                            <span
+                              className="h-1.5 w-1.5 shrink-0 rounded-full"
+                              style={{ background: precisionColor(p) }}
+                            />
+                          )}
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="border-t border-panel-border px-4 py-3">
+                  <button
+                    onClick={() => setFavoritesOnly((v) => !v)}
+                    className="flex w-full items-center justify-between gap-2 text-sm"
+                  >
+                    <span className="flex items-center gap-2 text-foreground/80">
+                      <svg
+                        viewBox="0 0 24 24"
+                        className={`h-4 w-4 ${
+                          favoritesOnly ? "text-yellow-400" : "text-foreground/50"
+                        }`}
+                        fill={favoritesOnly ? "currentColor" : "none"}
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14l-5-4.87 6.91-1.01L12 2z" />
+                      </svg>
+                      Favorites only
+                    </span>
+                    <span
+                      className={`relative h-5 w-9 shrink-0 rounded-full transition ${
+                        favoritesOnly ? "bg-accent" : "bg-panel-border"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition ${
+                          favoritesOnly ? "left-[18px]" : "left-0.5"
+                        }`}
+                      />
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex overflow-hidden rounded-md border border-panel-border">
             {(["all", "Attack", "Defense"] as SideFilter[]).map((s) => (
               <button
@@ -281,19 +501,49 @@ export default function MinimapView({
             const a = getAgent(first.agentSlug);
             const many = c.items.length > 1;
             const p = rotatePoint(c.x, c.y, rot);
+            // Ring encodes precision: a solid color when uniform, or proportional
+            // arcs (conic-gradient) when a cluster mixes precision levels.
+            const precisions = new Set(
+              c.items.map((l) => l.precision ?? "unset"),
+            );
+            const uniform = precisions.size === 1 ? first.precision : undefined;
+            // Inner disc encodes side: red for Attack, blue for Defense (neutral
+            // when a cluster somehow mixes sides).
+            const sidesHere = new Set(c.items.map((l) => l.side));
+            const markerSide = sidesHere.size === 1 ? first.side : undefined;
+            // Muted so they don't fight the (brighter) precision ring colors.
+            const innerColor =
+              markerSide === "Defense"
+                ? "#35678f"
+                : markerSide === "Attack"
+                  ? "#a83a48"
+                  : "#0f1115";
             return (
               <button
                 key={ci}
                 onClick={() => (many ? setCluster(c.items) : setSelected(first))}
                 title={
                   many
-                    ? `${c.items.length} lineups here`
-                    : `${a?.name ?? first.agentSlug} — ${first.title}`
+                    ? `${c.items.length} lineups here${
+                        uniform ? ` — ${uniform} precision` : ""
+                      }`
+                    : `${a?.name ?? first.agentSlug} — ${first.title}${
+                        first.precision
+                          ? ` (${first.precision} precision)`
+                          : ""
+                      }`
                 }
-                className="absolute z-[5] h-8 w-8 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-accent shadow-lg transition hover:z-10 hover:scale-110"
-                style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%` }}
+                className="absolute z-[5] h-8 w-8 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-lg transition hover:z-10 hover:scale-110"
+                style={{
+                  left: `${p.x * 100}%`,
+                  top: `${p.y * 100}%`,
+                  background: precisionRing(c.items),
+                }}
               >
-                <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full text-[10px] font-bold text-white">
+                <span
+                  className="absolute inset-[3px] flex items-center justify-center overflow-hidden rounded-full text-[10px] font-bold text-white"
+                  style={{ background: innerColor }}
+                >
                   {a?.icon ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
@@ -464,12 +714,21 @@ function ClusterModal({
                   className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left"
                 >
                   {a?.icon && (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src={a.icon}
-                      alt={a.name}
-                      className="h-9 w-9 shrink-0 rounded-full border border-panel-border object-cover"
-                    />
+                    <span className="relative shrink-0">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={a.icon}
+                        alt={a.name}
+                        className="h-9 w-9 rounded-full border border-panel-border object-cover"
+                      />
+                      {l.precision && (
+                        <span
+                          className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-panel"
+                          style={{ background: precisionColor(l.precision) }}
+                          title={`${l.precision} precision`}
+                        />
+                      )}
+                    </span>
                   )}
                   <span className="min-w-0">
                     <span className="block truncate text-xs font-semibold uppercase tracking-wide text-accent">
@@ -535,6 +794,35 @@ function MinimapDetail({
   const { stepOverlays, placedBothDarts, isSova, isDouble } =
     buildCardDartOverlays(lineup, "full");
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Log to the local "recently viewed" history whenever this detail opens.
+  useEffect(() => {
+    recordView(lineup.id);
+  }, [lineup.id]);
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(lineupLink(lineup));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard unavailable — non-critical.
+    }
+  }
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDocClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [menuOpen]);
 
   useEffect(() => {
     if (lightboxIdx === null || editor.annotating) return;
@@ -554,11 +842,16 @@ function MinimapDetail({
       onClick={onClose}
     >
       <div
-        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-panel-border bg-panel"
+        className="relative max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-panel-border bg-panel"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between border-b border-panel-border p-5">
-          <div>
+        {copied && (
+          <div className="pointer-events-none absolute right-4 top-16 z-20 rounded bg-black/80 px-2 py-1 text-xs text-white">
+            Link copied
+          </div>
+        )}
+        <div className="flex items-start justify-between gap-3 border-b border-panel-border p-5">
+          <div className="min-w-0">
             <div className="text-xs font-semibold uppercase tracking-wide text-accent">
               {agent?.name ?? lineup.agentSlug}
               {lineup.ability ? ` • ${lineup.ability}` : ""} • {lineup.side}
@@ -566,33 +859,59 @@ function MinimapDetail({
                 ? ` • ${lineup.site === "Mid" ? "Mid" : `${lineup.site} Site`}`
                 : ""}
             </div>
-            <h2 className="mt-1 text-xl font-bold">{lineup.title}</h2>
+            <div className="mt-1 flex items-center gap-2">
+              <h2 className="text-xl font-bold">{lineup.title}</h2>
+              <FavoriteStar id={lineup.id} size="sm" />
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            {canEdit && onEdit && (
+          <div className="flex shrink-0 items-center gap-1">
+            <div ref={menuRef} className="relative">
               <button
-                onClick={() => onEdit(lineup)}
-                className="rounded px-2 py-1 text-sm text-foreground/70 hover:text-accent"
-                aria-label="Edit lineup"
-                title="Edit lineup"
+                aria-label="Lineup options"
+                onClick={() => setMenuOpen((o) => !o)}
+                className="flex h-9 w-9 items-center justify-center rounded-full text-xl leading-none text-foreground/70 hover:bg-panel-border hover:text-accent"
               >
-                ✎ Edit
+                ⋮
               </button>
-            )}
-            {canEdit && onDelete && (
-              <button
-                onClick={() => onDelete(lineup)}
-                className="rounded px-2 py-1 text-sm text-foreground/70 hover:text-accent"
-                aria-label="Delete lineup"
-                title="Delete lineup"
-              >
-                Delete
-              </button>
-            )}
-            <FavoriteStar id={lineup.id} size="sm" />
+              {menuOpen && (
+                <div className="absolute right-0 z-10 mt-1 w-36 overflow-hidden rounded-md border border-panel-border bg-panel shadow-lg">
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      copyLink();
+                    }}
+                    className="block w-full px-3 py-2 text-left text-sm hover:bg-panel-border"
+                  >
+                    {copied ? "✓ Copied" : "Copy link"}
+                  </button>
+                  {canEdit && onEdit && (
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onEdit(lineup);
+                      }}
+                      className="block w-full px-3 py-2 text-left text-sm hover:bg-panel-border"
+                    >
+                      Edit
+                    </button>
+                  )}
+                  {canEdit && onDelete && (
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onDelete(lineup);
+                      }}
+                      className="block w-full px-3 py-2 text-left text-sm text-accent hover:bg-panel-border"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
             <button
               onClick={onClose}
-              className="rounded p-1 text-foreground/60 hover:text-accent"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-lg leading-none text-foreground/60 hover:bg-panel-border hover:text-accent"
               aria-label="Close"
             >
               ✕

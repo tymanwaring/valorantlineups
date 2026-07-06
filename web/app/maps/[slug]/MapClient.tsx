@@ -7,7 +7,9 @@ import { AGENTS, getAgent } from "@/lib/agents";
 import { MAPS, getMapSites } from "@/lib/maps";
 import type { Lineup } from "@/lib/types";
 import type { Callout } from "@/lib/callouts";
+import { lineupLink } from "@/lib/lineup-link";
 import { useFavorites } from "@/lib/favorites";
+import { recordView } from "@/lib/recent";
 import { useProMode } from "@/lib/proMode";
 import { proStepIndices } from "@/lib/types";
 import StepsEditor from "@/app/components/StepsEditor";
@@ -29,11 +31,8 @@ import {
   LineupOverlayBadges,
 } from "@/app/components/lineupBadges";
 
-// Build a shareable deep link that opens a specific lineup on its map.
-export function lineupLink(l: Lineup): string {
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  return `${origin}/maps/${l.mapSlug}?side=${l.side}&lineup=${l.id}`;
-}
+// Re-exported from lib so both the list and minimap views can share it.
+export { lineupLink };
 
 type Side = "Attack" | "Defense";
 
@@ -955,6 +954,11 @@ function LineupModal({
   const { pro } = useProMode();
   const shownIdx = pro ? proStepIndices(steps) : steps.map((_, i) => i);
   const [copied, setCopied] = useState(false);
+
+  // Log to the local "recently viewed" history whenever this detail opens.
+  useEffect(() => {
+    recordView(lineup.id);
+  }, [lineup.id]);
 
   async function copyLink() {
     try {
