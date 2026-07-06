@@ -124,6 +124,28 @@ export default function MinimapView({
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [filterOpen]);
 
+  // Reflect the currently open lineup in the address bar so it can be copied /
+  // shared straight from the URL (no need to hit Share). Preserves other params.
+  useEffect(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      if (selected) {
+        p.set("lineup", selected.id);
+        p.set("side", selected.side);
+      } else {
+        p.delete("lineup");
+      }
+      const qs = p.toString();
+      window.history.replaceState(
+        null,
+        "",
+        qs ? `?${qs}` : window.location.pathname,
+      );
+    } catch {
+      // History API unavailable — non-critical.
+    }
+  }, [selected]);
+
   // Lineups on this side that have a placed throw position, then narrowed by any
   // active precision filter (so agent counts + markers all stay consistent).
   const placed = useMemo(

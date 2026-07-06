@@ -6,8 +6,9 @@ import { getMap } from "@/lib/maps";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Social preview (OpenGraph/Twitter) image for a shared lineup link. Rendered at
-// 1200x630 so it unfurls cleanly in Discord, iMessage, etc.
+// Social preview (OpenGraph/Twitter) image for a shared lineup link. A clean
+// text "overview" card (map/side/site, title, agent) rendered at 1200x630 so it
+// unfurls cleanly in Discord, iMessage, etc.
 export async function GET(req: Request) {
   const { searchParams, origin } = new URL(req.url);
   const id = searchParams.get("lineup");
