@@ -182,20 +182,19 @@ export default function StepCarousel({
             </div>
           )}
 
-          {/* Caption overlay */}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-4 pt-10">
-            {overlays?.[current] && (
-              <div className="mb-2 flex">{overlays[current]}</div>
-            )}
-            <div className="flex items-end justify-between gap-3">
-              <p className="text-sm font-semibold text-white">
+          {/* Caption overlay — compact pills (no full-width dark band) so the
+              bottom of the image stays visible for lining up the reference. */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-3">
+            <div className="flex flex-col items-start gap-2">
+              {overlays?.[current] && <div className="flex">{overlays[current]}</div>}
+              <p className="rounded bg-black/60 px-2 py-0.5 text-sm font-semibold text-white">
                 <span className="mr-2 text-accent">{current + 1}.</span>
                 {step.caption || `Step ${current + 1}`}
               </p>
-              <span className="shrink-0 rounded bg-black/60 px-2 py-0.5 text-xs text-white/70">
-                {current + 1} / {n}
-              </span>
             </div>
+            <span className="shrink-0 rounded bg-black/60 px-2 py-0.5 text-xs text-white/70">
+              {current + 1} / {n}
+            </span>
           </div>
 
           {n > 1 && (
