@@ -9,7 +9,7 @@ import type { Lineup } from "@/lib/types";
 import type { Callout } from "@/lib/callouts";
 import { useFavorites } from "@/lib/favorites";
 import { useProMode } from "@/lib/proMode";
-import { aimStepIndices } from "@/lib/types";
+import { proStepIndices } from "@/lib/types";
 import StepsEditor from "@/app/components/StepsEditor";
 import SovaFields from "@/app/components/SovaFields";
 import MechanicsFields from "@/app/components/MechanicsFields";
@@ -698,7 +698,7 @@ function LineupCard({
     buildCardDartOverlays(lineup);
 
   // Pro mode: collapse to just the "aim" step(s), keeping overlays aligned.
-  const stepIdx = pro ? aimStepIndices(steps) : steps.map((_, i) => i);
+  const stepIdx = pro ? proStepIndices(steps) : steps.map((_, i) => i);
   const displaySteps = stepIdx.map((i) => steps[i]);
   const displayOverlays = stepOverlays
     ? stepIdx.map((i) => stepOverlays[i])
@@ -953,7 +953,7 @@ function LineupModal({
   const { overlays: detailOverlays, placedAll } =
     buildDetailDartOverlays(lineup);
   const { pro } = useProMode();
-  const shownIdx = pro ? aimStepIndices(steps) : steps.map((_, i) => i);
+  const shownIdx = pro ? proStepIndices(steps) : steps.map((_, i) => i);
   const [copied, setCopied] = useState(false);
 
   async function copyLink() {

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getAgent, AGENTS } from "@/lib/agents";
 import { getMap } from "@/lib/maps";
 import type { Lineup } from "@/lib/types";
-import { aimStepIndices } from "@/lib/types";
+import { proStepIndices } from "@/lib/types";
 import { useProMode } from "@/lib/proMode";
 import StepCarousel from "@/app/components/StepCarousel";
 import ImageAnnotator from "@/app/components/ImageAnnotator";
@@ -530,7 +530,7 @@ function MinimapDetail({
   const hasSteps = steps.some((s) => s.image || s.caption.trim());
   const { pro } = useProMode();
   // Pro mode: quick reference shows just the aim step(s) in the inline preview.
-  const stepIdx = pro ? aimStepIndices(steps) : steps.map((_, i) => i);
+  const stepIdx = pro ? proStepIndices(steps) : steps.map((_, i) => i);
   const displaySteps = stepIdx.map((i) => steps[i]);
   const { stepOverlays, placedBothDarts, isSova, isDouble } =
     buildCardDartOverlays(lineup, "full");
