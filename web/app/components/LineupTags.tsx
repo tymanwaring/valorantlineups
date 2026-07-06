@@ -10,9 +10,11 @@ export default function LineupTags({
   lineup: Lineup;
   className?: string;
 }) {
-  const showJump = lineup.jump && lineup.agentSlug !== "sova";
+  // Non-Sova lineups always show a jump chip: "Jump" when required, otherwise a
+  // red "No jump". Sova's jump is rendered by SovaIndicator, so skip it here.
+  const showJumpTag = lineup.agentSlug !== "sova";
   const hasAny =
-    showJump ||
+    showJumpTag ||
     lineup.crouch ||
     lineup.timeToLand != null ||
     !!lineup.precision;
@@ -27,7 +29,8 @@ export default function LineupTags({
 
   return (
     <div className={`flex flex-wrap items-center gap-2 ${className}`}>
-      {showJump && <Chip>Jump</Chip>}
+      {showJumpTag &&
+        (lineup.jump ? <Chip>Jump</Chip> : <Chip tone="danger">No jump</Chip>)}
       {lineup.crouch && <Chip>Crouch</Chip>}
       {lineup.timeToLand != null && <Chip>{lineup.timeToLand}s to land</Chip>}
       {lineup.precision && (
@@ -42,9 +45,21 @@ export default function LineupTags({
   );
 }
 
-function Chip({ children }: { children: React.ReactNode }) {
+function Chip({
+  children,
+  tone = "default",
+}: {
+  children: React.ReactNode;
+  tone?: "default" | "danger";
+}) {
+  const toneClass =
+    tone === "danger"
+      ? "border-accent/50 bg-accent/10 text-accent"
+      : "border-panel-border bg-panel-border/40 text-foreground/80";
   return (
-    <span className="inline-flex items-center gap-1 rounded border border-panel-border bg-panel-border/40 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+    <span
+      className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-medium ${toneClass}`}
+    >
       {children}
     </span>
   );
