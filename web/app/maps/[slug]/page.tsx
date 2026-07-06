@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getMap, MAPS } from "@/lib/maps";
 import { getAgent } from "@/lib/agents";
@@ -45,7 +46,14 @@ export async function generateMetadata({
     ]
       .filter(Boolean)
       .join(" • ");
-    const image = `/api/og?lineup=${lineup.id}`;
+    // Build an absolute image URL from the actual request host so the unfurl
+    // points at the public domain (e.g. brimmybuddy.com) rather than the
+    // auth-protected raw Vercel deployment URL that VERCEL_URL resolves to.
+    const h = await headers();
+    const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
+    const proto = h.get("x-forwarded-proto") ?? "https";
+    const base = host ? `${proto}://${host}` : "";
+    const image = `${base}/api/og?lineup=${lineup.id}`;
     return {
       title,
       description,
