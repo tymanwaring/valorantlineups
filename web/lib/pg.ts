@@ -240,6 +240,12 @@ export async function pgGetLineups(): Promise<Lineup[]> {
   return (rows as Row[]).map(rowToLineup);
 }
 
+export async function pgGetUsedAgentSlugs(): Promise<string[]> {
+  await ensureSchema();
+  const rows = await db()`SELECT DISTINCT agent_slug FROM lineups`;
+  return (rows as { agent_slug: string }[]).map((r) => String(r.agent_slug));
+}
+
 export async function pgGetLineupsForMap(mapSlug: string): Promise<Lineup[]> {
   await ensureSchema();
   const rows =

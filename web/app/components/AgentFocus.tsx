@@ -6,10 +6,17 @@ import { useAgentFocus } from "@/lib/agentFocus";
 
 // Header dropdown to pick a "main agent". Persists globally so map views default
 // to just that agent's lineups. Handy for one-trick mains.
-export default function AgentFocus() {
+export default function AgentFocus({ usedAgents }: { usedAgents: string[] }) {
   const { focus, setFocus, ready } = useAgentFocus();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  // Only offer agents that actually have lineups (plus keep a currently-focused
+  // agent visible even if its last lineup was removed, so it can be cleared).
+  const used = new Set(usedAgents);
+  const agents = AGENTS.filter(
+    (a) => used.has(a.slug) || a.slug === focus,
+  ).sort((a, b) => a.name.localeCompare(b.name));
 
   useEffect(() => {
     if (!open) return;
@@ -100,9 +107,7 @@ export default function AgentFocus() {
             </span>
             All agents
           </button>
-          {[...AGENTS]
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .map((a) => (
+          {agents.map((a) => (
               <button
                 key={a.slug}
                 onClick={() => {

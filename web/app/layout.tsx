@@ -5,6 +5,7 @@ import Link from "next/link";
 import "./globals.css";
 import { adminAuthEnabled } from "@/lib/auth";
 import { canManage } from "@/lib/session";
+import { getUsedAgentSlugs } from "@/lib/store";
 import HeaderNav from "./components/HeaderNav";
 
 const geistSans = Geist({
@@ -36,7 +37,10 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const manage = await canManage();
+  const [manage, usedAgents] = await Promise.all([
+    canManage(),
+    getUsedAgentSlugs(),
+  ]);
   // Only surface the logout button when a real password gate is active.
   const loggedIn = adminAuthEnabled() && manage;
 
@@ -54,7 +58,11 @@ export default async function RootLayout({
             >
               <span className="text-accent">brimmy</span>buddy
             </Link>
-            <HeaderNav manage={manage} loggedIn={loggedIn} />
+            <HeaderNav
+              manage={manage}
+              loggedIn={loggedIn}
+              usedAgents={usedAgents}
+            />
           </div>
         </header>
         <main className="flex-1">{children}</main>

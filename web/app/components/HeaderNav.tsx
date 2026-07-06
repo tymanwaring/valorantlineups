@@ -13,9 +13,11 @@ import LogoutButton from "./LogoutButton";
 export default function HeaderNav({
   manage,
   loggedIn,
+  usedAgents,
 }: {
   manage: boolean;
   loggedIn: boolean;
+  usedAgents: string[];
 }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -36,7 +38,7 @@ export default function HeaderNav({
   return (
     <nav className="flex items-center gap-3 text-sm font-medium sm:gap-4">
       {/* View settings — always visible (compact). */}
-      <AgentFocus />
+      <AgentFocus usedAgents={usedAgents} />
       <ProModeToggle />
 
       {/* Desktop: divider + inline page links. */}

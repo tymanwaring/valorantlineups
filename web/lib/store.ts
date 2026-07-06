@@ -8,6 +8,7 @@ import {
   pgGetLineups,
   pgGetLineupsForMap,
   pgGetLineup,
+  pgGetUsedAgentSlugs,
   pgAddLineup,
   pgUpdateLineup,
   pgDeleteLineup,
@@ -100,6 +101,12 @@ export async function getLineupsForMap(mapSlug: string): Promise<Lineup[]> {
   if (pgEnabled) return pgGetLineupsForMap(mapSlug);
   const lineups = await fileGetLineups();
   return lineups.filter((l) => l.mapSlug === mapSlug.toLowerCase());
+}
+
+export async function getUsedAgentSlugs(): Promise<string[]> {
+  if (pgEnabled) return pgGetUsedAgentSlugs();
+  const lineups = await fileGetLineups();
+  return [...new Set(lineups.map((l) => l.agentSlug))];
 }
 
 export async function getLineup(id: string): Promise<Lineup | undefined> {
