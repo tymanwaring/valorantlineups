@@ -469,7 +469,15 @@ export default function ImageAnnotator({
   );
 
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col items-center justify-start overflow-y-auto bg-black/90 p-3 sm:justify-center sm:p-4">
+    <div
+      className="fixed inset-0 z-[70] flex flex-col items-center justify-start overflow-y-auto bg-black/90 p-3 sm:justify-center sm:p-4"
+      // Self-contained modal: keep clicks/pointer events from bubbling up to a
+      // parent overlay (e.g. the lightbox backdrop's onClose), which would
+      // otherwise close the whole preview when using the annotator's controls.
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
       {/* Toolbar — single scrollable row on phones, wraps + centers on wider. */}
       <div className="mb-3 flex w-full max-w-[95vw] items-center gap-2 overflow-x-auto rounded-lg border border-panel-border bg-panel px-3 py-2 [&>*]:shrink-0 sm:flex-wrap sm:justify-center sm:overflow-visible">
         {TOOLS.map((t) => (
