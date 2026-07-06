@@ -21,8 +21,11 @@ const ROTATIONS: Rotation[] = [0, 90, 180, 270];
  * metric can pick a sideways rotation there). Falls back to attacker Y alone
  * when a defender spawn callout isn't available.
  */
-export function attackerBottomRotation(slug: string): Rotation {
-  const callouts = getCallouts(slug);
+export function attackerBottomRotation(
+  slug: string,
+  calloutsOverride?: Callout[],
+): Rotation {
+  const callouts = calloutsOverride ?? getCallouts(slug);
   const attacker = callouts.find((c) => c.n === "Spawn" && /attack/i.test(c.s));
   if (!attacker) return 0;
   const defender = callouts.find((c) => c.n === "Spawn" && /defend/i.test(c.s));

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AGENTS, getAgent } from "@/lib/agents";
 import { MAPS, getMapSites } from "@/lib/maps";
 import type { Lineup } from "@/lib/types";
+import type { Callout } from "@/lib/callouts";
 import { useFavorites } from "@/lib/favorites";
 import { useProMode } from "@/lib/proMode";
 import { aimStepIndices } from "@/lib/types";
@@ -79,12 +80,14 @@ export default function MapClient({
   mapName,
   mapImage,
   lineups,
+  callouts,
   canEdit,
 }: {
   mapSlug: string;
   mapName: string;
   mapImage: string;
   lineups: Lineup[];
+  callouts: Callout[];
   canEdit: boolean;
 }) {
   const router = useRouter();
@@ -285,6 +288,7 @@ export default function MapClient({
             <MinimapView
               mapSlug={mapSlug}
               lineups={lineups}
+              callouts={callouts}
               canEdit={canEdit}
               onEdit={(l) => setEditing(l)}
               onDelete={(l) => setDeleting(l)}

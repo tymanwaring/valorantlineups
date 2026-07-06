@@ -10,7 +10,7 @@ import {
 } from "@/lib/callouts";
 
 // Full-page drag-and-drop editor for a map's callout label positions. Saving
-// writes back to the committed callouts.json via /api/callouts.
+// persists via /api/callouts (Postgres on prod, callouts.json in local dev).
 export default function CalloutEditor({
   mapSlug,
   mapName,
@@ -31,7 +31,9 @@ export default function CalloutEditor({
   const [msg, setMsg] = useState<string | null>(null);
   const mapBoxRef = useRef<HTMLDivElement>(null);
 
-  const rot = attackerBottomRotation(mapSlug);
+  // Keep the rotation fixed for the whole session (based on the resolved
+  // positions) so the map doesn't spin while a spawn label is being dragged.
+  const rot = attackerBottomRotation(mapSlug, initialCallouts);
 
   function moveCallout(i: number, e: React.PointerEvent) {
     const box = mapBoxRef.current;

@@ -2,6 +2,7 @@ import { neon } from "@neondatabase/serverless";
 import { randomUUID } from "crypto";
 import type { Lineup, NewLineup } from "./types";
 import { normalizeSteps } from "./types";
+import type { Callout } from "./callouts";
 import { MAPS } from "./maps";
 
 const CONNECTION =
@@ -140,6 +141,13 @@ async function ensureSchema(): Promise<void> {
       await q`
         CREATE TABLE IF NOT EXISTS rotation (
           map_slug text PRIMARY KEY
+        )
+      `;
+      // Per-map callout label position overrides (edited via the label editor).
+      await q`
+        CREATE TABLE IF NOT EXISTS callouts (
+          map_slug text PRIMARY KEY,
+          data jsonb NOT NULL
         )
       `;
 
@@ -304,6 +312,31 @@ export async function pgDeleteLineup(id: string): Promise<Lineup | undefined> {
   if (!existing) return undefined;
   await db()`DELETE FROM lineups WHERE id = ${id}::uuid`;
   return existing;
+}
+
+export async function pgGetCalloutsForMap(
+  slug: string,
+): Promise<Callout[] | null> {
+  await ensureSchema();
+  const rows =
+    await db()`SELECT data FROM callouts WHERE map_slug = ${slug.toLowerCase()}`;
+  const row = (rows as Row[])[0];
+  if (!row) return null;
+  const data = row.data;
+  const parsed = typeof data === "string" ? safeJson(data) : data;
+  return Array.isArray(parsed) ? (parsed as Callout[]) : null;
+}
+
+export async function pgSetCallouts(
+  slug: string,
+  callouts: Callout[],
+): Promise<void> {
+  await ensureSchema();
+  await db()`
+    INSERT INTO callouts (map_slug, data)
+    VALUES (${slug.toLowerCase()}, ${JSON.stringify(callouts)}::jsonb)
+    ON CONFLICT (map_slug) DO UPDATE SET data = EXCLUDED.data
+  `;
 }
 
 export async function pgGetRotation(): Promise<string[]> {

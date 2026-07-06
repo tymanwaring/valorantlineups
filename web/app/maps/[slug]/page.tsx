@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getMap, MAPS } from "@/lib/maps";
 import { getLineupsForMap } from "@/lib/store";
+import { getMapCallouts } from "@/lib/callouts-store";
 import { canManage } from "@/lib/session";
 import MapClient from "./MapClient";
 
@@ -19,8 +20,11 @@ export default async function MapPage({
   const map = getMap(slug);
   if (!map) notFound();
 
-  const lineups = await getLineupsForMap(map.slug);
-  const canEdit = await canManage();
+  const [lineups, callouts, canEdit] = await Promise.all([
+    getLineupsForMap(map.slug),
+    getMapCallouts(map.slug),
+    canManage(),
+  ]);
 
   return (
     <MapClient
@@ -28,6 +32,7 @@ export default async function MapPage({
       mapName={map.name}
       mapImage={map.image}
       lineups={lineups}
+      callouts={callouts}
       canEdit={canEdit}
     />
   );

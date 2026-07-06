@@ -2,13 +2,22 @@ import {
   getCallouts,
   attackerBottomRotation,
   rotatePoint,
+  type Callout,
 } from "@/lib/callouts";
 
 // Non-interactive overlay of Valorant callout region names, positioned over a
-// top-down minimap (parent must be `relative`).
-export default function MinimapCallouts({ slug }: { slug: string }) {
-  const callouts = getCallouts(slug);
-  const rot = attackerBottomRotation(slug);
+// top-down minimap (parent must be `relative`). Pass `callouts` to render
+// server-resolved positions (with DB overrides); otherwise falls back to the
+// bundled baseline for the slug.
+export default function MinimapCallouts({
+  slug,
+  callouts: calloutsProp,
+}: {
+  slug: string;
+  callouts?: Callout[];
+}) {
+  const callouts = calloutsProp ?? getCallouts(slug);
+  const rot = attackerBottomRotation(slug, callouts);
   if (callouts.length === 0) return null;
   return (
     <div className="pointer-events-none absolute inset-0 z-[1]">

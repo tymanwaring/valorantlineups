@@ -17,7 +17,11 @@ import {
   buildCardDartOverlays,
   LineupOverlayBadges,
 } from "@/app/components/lineupBadges";
-import { attackerBottomRotation, rotatePoint } from "@/lib/callouts";
+import {
+  attackerBottomRotation,
+  rotatePoint,
+  type Callout,
+} from "@/lib/callouts";
 
 type Side = "Attack" | "Defense";
 type SideFilter = Side | "all";
@@ -27,6 +31,7 @@ type SideFilter = Side | "all";
 export default function MinimapView({
   mapSlug,
   lineups,
+  callouts,
   canEdit = false,
   onEdit,
   onDelete,
@@ -34,6 +39,7 @@ export default function MinimapView({
 }: {
   mapSlug: string;
   lineups: Lineup[];
+  callouts?: Callout[];
   canEdit?: boolean;
   onEdit?: (l: Lineup) => void;
   onDelete?: (l: Lineup) => void;
@@ -120,7 +126,7 @@ export default function MinimapView({
 
   const sideAccent = side === "Defense" ? "#38bdf8" : "#ff4655";
   const sideLabel = side === "all" ? "All" : side;
-  const rot = attackerBottomRotation(mapSlug);
+  const rot = attackerBottomRotation(mapSlug, callouts);
 
   return (
     <div style={{ ["--accent" as string]: sideAccent }}>
@@ -217,7 +223,9 @@ export default function MinimapView({
             draggable={false}
           />
 
-          {showCallouts && <MinimapCallouts slug={mapSlug} />}
+          {showCallouts && (
+            <MinimapCallouts slug={mapSlug} callouts={callouts} />
+          )}
 
           {/* Trajectory lines from each start to its landing spot. */}
           <svg

@@ -8,6 +8,7 @@ import {
   rotatePoint,
   rotateInverse,
   type Rotation,
+  type Callout,
 } from "@/lib/callouts";
 
 type Pt = { x: number; y: number };
@@ -20,10 +21,12 @@ const ZOOM = 1.75; // magnification factor
 // landing ("to") points. Emits normalized (0-1) form fields fromX/fromY/toX/toY.
 export default function MinimapPicker({
   mapSlug,
+  callouts,
   defaultFrom,
   defaultTo,
 }: {
   mapSlug: string;
+  callouts?: Callout[];
   defaultFrom?: Pt;
   defaultTo?: Pt;
 }) {
@@ -42,7 +45,7 @@ export default function MinimapPicker({
   const boxRef = useRef<HTMLDivElement>(null);
 
   const map = getMap(mapSlug);
-  const rot = attackerBottomRotation(mapSlug);
+  const rot = attackerBottomRotation(mapSlug, callouts);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -153,6 +156,7 @@ export default function MinimapPicker({
           minimapSrc={map.minimap}
           mapName={map.name}
           slug={mapSlug}
+          callouts={callouts}
           rot={rot}
           from={from}
           to={to}
@@ -186,6 +190,7 @@ export default function MinimapPicker({
                 minimapSrc={map.minimap}
                 mapName={map.name}
                 slug={mapSlug}
+                callouts={callouts}
                 rot={rot}
                 from={from}
                 to={to}
@@ -219,6 +224,7 @@ function MapLayers({
   minimapSrc,
   mapName,
   slug,
+  callouts,
   rot,
   from,
   to,
@@ -226,6 +232,7 @@ function MapLayers({
   minimapSrc: string;
   mapName: string;
   slug: string;
+  callouts?: Callout[];
   rot: Rotation;
   from: Pt | null;
   to: Pt | null;
@@ -241,7 +248,7 @@ function MapLayers({
         draggable={false}
       />
 
-      <MinimapCallouts slug={slug} />
+      <MinimapCallouts slug={slug} callouts={callouts} />
 
       {from && to && (
         <svg
