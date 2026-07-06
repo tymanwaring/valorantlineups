@@ -32,14 +32,17 @@ export default function MinimapCallouts({
         else if (isSpawn && attacker) label = "Attacker Spawn";
         else if (isSpawn && defender) label = "Defender Spawn";
 
-        // All callouts are white; spawns are color-coded by side.
-        const color = isSpawn
-          ? attacker
-            ? "#ff4655"
-            : defender
-              ? "#38bdf8"
-              : "#ffffff"
-          : "#ffffff";
+        // Official callouts are white (spawns color-coded by side); user-added
+        // custom callouts are gold so they stand out as personal lineup spots.
+        const color = c.custom
+          ? "#ffd60a"
+          : isSpawn
+            ? attacker
+              ? "#ff4655"
+              : defender
+                ? "#38bdf8"
+                : "#ffffff"
+            : "#ffffff";
 
         const p = rotatePoint(c.x, c.y, rot);
 
@@ -56,7 +59,9 @@ export default function MinimapCallouts({
                 ? "text-xs font-bold"
                 : isSpawn
                   ? "text-[10px] font-bold"
-                  : "text-[9px] font-semibold"
+                  : c.custom
+                    ? "text-[10px] font-semibold"
+                    : "text-[9px] font-semibold"
             }`}
             style={{
               left: `${p.x * 100}%`,

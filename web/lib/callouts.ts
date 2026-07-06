@@ -1,6 +1,13 @@
 import data from "./callouts.json";
 
-export type Callout = { n: string; s: string; x: number; y: number };
+export type Callout = {
+  n: string;
+  s: string;
+  x: number;
+  y: number;
+  /** User-added callout (vs. the official ones from valorant-api). */
+  custom?: boolean;
+};
 
 const callouts = data as Record<string, Callout[]>;
 

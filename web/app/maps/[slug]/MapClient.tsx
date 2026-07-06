@@ -406,6 +406,16 @@ export default function MapClient({
                     href={`/admin?map=${mapSlug}${
                       allSideFilter !== "all" ? `&side=${allSideFilter}` : ""
                     }${agent !== "all" ? `&agent=${agent}` : ""}`}
+                    onClick={() => {
+                      try {
+                        sessionStorage.setItem(
+                          "addLineupReturnTo",
+                          window.location.pathname + window.location.search,
+                        );
+                      } catch {
+                        // Storage unavailable — non-critical.
+                      }
+                    }}
                     className="mt-4 inline-block rounded bg-accent px-4 py-2 text-sm font-semibold text-white"
                   >
                     + Add the first lineup

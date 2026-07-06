@@ -29,6 +29,7 @@ export default function CalloutEditor({
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [newName, setNewName] = useState("");
   const mapBoxRef = useRef<HTMLDivElement>(null);
 
   // Keep the rotation fixed for the whole session (based on the resolved
@@ -86,6 +87,21 @@ export default function CalloutEditor({
     setMsg(null);
   }
 
+  // Add a custom callout at the map center; the user then drags it into place.
+  function addCallout() {
+    const n = newName.trim();
+    if (!n) return;
+    setCallouts((prev) => [
+      ...prev,
+      { n, s: "", x: 0.5, y: 0.5, custom: true },
+    ]);
+    setNewName("");
+  }
+
+  function deleteCallout(i: number) {
+    setCallouts((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -127,6 +143,28 @@ export default function CalloutEditor({
         </div>
       </div>
 
+      <div className="mx-auto mb-3 flex max-w-3xl items-center gap-2">
+        <input
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addCallout();
+            }
+          }}
+          placeholder="Add a custom callout (e.g. Tree molly spot)"
+          className="flex-1 rounded-md border border-panel-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
+        />
+        <button
+          onClick={addCallout}
+          disabled={!newName.trim()}
+          className="rounded-md border border-panel-border bg-panel px-3 py-2 text-sm text-foreground/80 transition hover:bg-panel-border disabled:opacity-50"
+        >
+          + Add callout
+        </button>
+      </div>
+
       <div className="mx-auto max-w-3xl">
         <div
           ref={mapBoxRef}
@@ -153,13 +191,15 @@ export default function CalloutEditor({
               else if (isSpawn && attacker) label = "Attacker Spawn";
               else if (isSpawn && defender) label = "Defender Spawn";
 
-              const color = isSpawn
-                ? attacker
-                  ? "#ff4655"
-                  : defender
-                    ? "#38bdf8"
-                    : "#ffffff"
-                : "#ffffff";
+              const color = c.custom
+                ? "#ffd60a"
+                : isSpawn
+                  ? attacker
+                    ? "#ff4655"
+                    : defender
+                      ? "#38bdf8"
+                      : "#ffffff"
+                  : "#ffffff";
 
               const p = rotatePoint(c.x, c.y, rot);
 
@@ -179,14 +219,20 @@ export default function CalloutEditor({
                     e.currentTarget.releasePointerCapture(e.pointerId);
                     setDragIdx(null);
                   }}
-                  className={`absolute cursor-move touch-none select-none whitespace-nowrap rounded bg-black/50 px-1 uppercase tracking-wide ring-1 ${
-                    dragIdx === i ? "ring-accent" : "ring-white/50"
+                  className={`absolute inline-flex cursor-move touch-none select-none items-center gap-1 whitespace-nowrap rounded bg-black/50 px-1 uppercase tracking-wide ring-1 ${
+                    dragIdx === i
+                      ? "ring-accent"
+                      : c.custom
+                        ? "ring-[#ffd60a]/70"
+                        : "ring-white/50"
                   } ${
                     isSite
                       ? "text-xs font-bold"
                       : isSpawn
                         ? "text-[10px] font-bold"
-                        : "text-[9px] font-semibold"
+                        : c.custom
+                          ? "text-[10px] font-semibold"
+                          : "text-[9px] font-semibold"
                   }`}
                   style={{
                     left: `${p.x * 100}%`,
@@ -198,6 +244,19 @@ export default function CalloutEditor({
                   }}
                 >
                   {label}
+                  {c.custom && (
+                    <button
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteCallout(i);
+                      }}
+                      aria-label={`Delete ${label}`}
+                      className="leading-none text-white/60 hover:text-red-400"
+                    >
+                      ×
+                    </button>
+                  )}
                 </span>
               );
             })}
@@ -205,8 +264,9 @@ export default function CalloutEditor({
         </div>
 
         <p className="mt-3 text-center text-sm text-foreground/50">
-          Drag each label to reposition it, then Save labels. Reset reverts to
-          the last save.
+          Drag each label to reposition it. Add custom callouts (shown in gold)
+          for your own lineup spots and drag them into place; hit × to remove
+          one. Save labels to keep changes — Reset reverts to the last save.
         </p>
       </div>
     </div>

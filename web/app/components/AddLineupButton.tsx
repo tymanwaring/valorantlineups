@@ -14,6 +14,16 @@ export default function AddLineupButton({
   const pathname = usePathname();
 
   function go() {
+    // Remember where we were so the Add form can return here after saving.
+    try {
+      sessionStorage.setItem(
+        "addLineupReturnTo",
+        window.location.pathname + window.location.search,
+      );
+    } catch {
+      // Storage unavailable — non-critical.
+    }
+
     let href = "/admin";
     if (pathname?.startsWith("/maps/")) {
       try {

@@ -52,11 +52,16 @@ export default function AdminPage() {
       setStatus("done");
       setMessage("Lineup added!");
       form.reset();
-      setAgentSlug("");
-      setMapSlug("");
-      setAbility("");
-      setDoubleShock(false);
-      setSide("Attack");
+      // Return to whatever view the user was on before adding, if known.
+      let returnTo = "/";
+      try {
+        const r = sessionStorage.getItem("addLineupReturnTo");
+        if (r) returnTo = r;
+        sessionStorage.removeItem("addLineupReturnTo");
+      } catch {
+        // Storage unavailable — fall back to home.
+      }
+      router.push(returnTo);
       router.refresh();
     } catch (err) {
       setStatus("error");

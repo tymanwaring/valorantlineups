@@ -6,7 +6,13 @@ import type { Callout } from "@/lib/callouts";
 
 export const dynamic = "force-dynamic";
 
-type CalloutInput = { n: string; s: string; x: number; y: number };
+type CalloutInput = {
+  n: string;
+  s: string;
+  x: number;
+  y: number;
+  custom?: boolean;
+};
 
 const clamp = (n: number): number =>
   Math.min(1, Math.max(0, Math.round(n * 1e4) / 1e4));
@@ -33,12 +39,15 @@ export async function POST(req: NextRequest) {
   }
 
   const cleaned: Callout[] = body.callouts
-    .map((c) => ({
-      n: String(c.n ?? ""),
-      s: String(c.s ?? ""),
-      x: clamp(Number(c.x)),
-      y: clamp(Number(c.y)),
-    }))
+    .map((c) => {
+      const base = {
+        n: String(c.n ?? ""),
+        s: String(c.s ?? ""),
+        x: clamp(Number(c.x)),
+        y: clamp(Number(c.y)),
+      };
+      return c.custom ? { ...base, custom: true } : base;
+    })
     .filter((c) => c.n && Number.isFinite(c.x) && Number.isFinite(c.y));
 
   try {
