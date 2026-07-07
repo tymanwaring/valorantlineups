@@ -21,6 +21,7 @@ import MinimapPicker from "@/app/components/MinimapPicker";
 import MinimapView from "./MinimapView";
 import LineupTags from "@/app/components/LineupTags";
 import FavoriteStar from "@/app/components/FavoriteStar";
+import NavArrow from "@/app/components/NavArrow";
 import { SovaIndicator } from "@/app/components/SovaIndicator";
 import StepCarousel from "@/app/components/StepCarousel";
 import AnnotatedImage from "@/app/components/AnnotatedImage";
@@ -452,7 +453,12 @@ export default function MapClient({
             )}
 
             {viewing && (
-              <LineupModal lineup={viewing} onClose={() => setViewing(null)} />
+              <LineupModal
+                lineup={viewing}
+                siblings={filtered}
+                onNavigate={setViewing}
+                onClose={() => setViewing(null)}
+              />
             )}
           </div>
         )}
@@ -864,10 +870,14 @@ function ModalShell({
   children,
   onClose,
   maxWidth = "max-w-3xl",
+  above,
+  below,
 }: {
   children: React.ReactNode;
   onClose: () => void;
   maxWidth?: string;
+  above?: React.ReactNode;
+  below?: React.ReactNode;
 }) {
   return (
     <div
@@ -875,10 +885,16 @@ function ModalShell({
       onClick={onClose}
     >
       <div
-        className={`max-h-[90vh] w-full ${maxWidth} overflow-y-auto rounded-xl border border-panel-border bg-panel`}
-        onClick={(e) => e.stopPropagation()}
+        className={`flex max-h-full w-full flex-col items-center gap-2.5 ${maxWidth}`}
       >
-        {children}
+        {above}
+        <div
+          className={`min-h-0 w-full ${above || below ? "max-h-[82vh]" : "max-h-[90vh]"} overflow-y-auto rounded-xl border border-panel-border bg-panel`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {children}
+        </div>
+        {below}
       </div>
     </div>
   );
@@ -955,9 +971,13 @@ function buildDetailDartOverlays(lineup: Lineup): {
 
 function LineupModal({
   lineup,
+  siblings = [],
+  onNavigate,
   onClose,
 }: {
   lineup: Lineup;
+  siblings?: Lineup[];
+  onNavigate?: (l: Lineup) => void;
   onClose: () => void;
 }) {
   const agent = getAgent(lineup.agentSlug);
@@ -969,10 +989,45 @@ function LineupModal({
   const shownIdx = pro ? proStepIndices(steps) : steps.map((_, i) => i);
   const [copied, setCopied] = useState(false);
 
+  // Navigation across the currently filtered list of lineups.
+  const navIdx = siblings.findIndex((s) => s.id === lineup.id);
+  const canNav = onNavigate != null && siblings.length > 1 && navIdx !== -1;
+  const goRel = (delta: number) => {
+    if (!canNav) return;
+    const n = siblings.length;
+    onNavigate!(siblings[(navIdx + delta + n) % n]);
+  };
+
   // Log to the local "recently viewed" history whenever this detail opens.
   useEffect(() => {
     recordView(lineup.id);
   }, [lineup.id]);
+
+  // Up/Down (and j/k) page through the list, ignoring typing in inputs.
+  useEffect(() => {
+    if (!canNav) return;
+    function onKey(e: KeyboardEvent) {
+      const el = e.target as HTMLElement | null;
+      if (
+        el &&
+        (el.tagName === "INPUT" ||
+          el.tagName === "TEXTAREA" ||
+          el.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.key === "ArrowDown" || e.key === "j") {
+        e.preventDefault();
+        goRel(1);
+      } else if (e.key === "ArrowUp" || e.key === "k") {
+        e.preventDefault();
+        goRel(-1);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canNav, navIdx, siblings]);
 
   async function copyLink() {
     try {
@@ -985,7 +1040,13 @@ function LineupModal({
   }
 
   return (
-    <ModalShell onClose={onClose}>
+    <ModalShell
+      onClose={onClose}
+      above={
+        canNav ? <NavArrow dir="prev" onClick={() => goRel(-1)} /> : null
+      }
+      below={canNav ? <NavArrow dir="next" onClick={() => goRel(1)} /> : null}
+    >
       <div className="flex items-start justify-between border-b border-panel-border p-5">
         <div>
           <div className="text-xs text-accent font-semibold uppercase tracking-wide">

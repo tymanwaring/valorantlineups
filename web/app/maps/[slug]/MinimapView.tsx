@@ -14,6 +14,7 @@ import { useAnnotatableSteps } from "@/app/components/useAnnotatableSteps";
 import { SovaIndicator } from "@/app/components/SovaIndicator";
 import LineupTags from "@/app/components/LineupTags";
 import FavoriteStar from "@/app/components/FavoriteStar";
+import NavArrow from "@/app/components/NavArrow";
 import { useFavorites } from "@/lib/favorites";
 import { useAgentFocus } from "@/lib/agentFocus";
 import MinimapCallouts from "@/app/components/MinimapCallouts";
@@ -621,6 +622,8 @@ export default function MinimapView({
       {selected && (
         <MinimapDetail
           lineup={selected}
+          siblings={shown}
+          onNavigate={setSelected}
           onClose={() => setSelected(null)}
           canEdit={canEdit}
           onRefresh={onRefresh}
@@ -796,6 +799,8 @@ function ClusterModal({
 
 function MinimapDetail({
   lineup,
+  siblings = [],
+  onNavigate,
   onClose,
   canEdit = false,
   onEdit,
@@ -803,6 +808,8 @@ function MinimapDetail({
   onRefresh,
 }: {
   lineup: Lineup;
+  siblings?: Lineup[];
+  onNavigate?: (l: Lineup) => void;
   onClose: () => void;
   canEdit?: boolean;
   onEdit?: (l: Lineup) => void;
@@ -810,6 +817,14 @@ function MinimapDetail({
   onRefresh?: () => void;
 }) {
   const agent = getAgent(lineup.agentSlug);
+  // Navigation across the map's currently shown lineups.
+  const navIdx = siblings.findIndex((s) => s.id === lineup.id);
+  const canNav = onNavigate != null && siblings.length > 1 && navIdx !== -1;
+  const goRel = (delta: number) => {
+    if (!canNav) return;
+    const n = siblings.length;
+    onNavigate!(siblings[(navIdx + delta + n) % n]);
+  };
   const editor = useAnnotatableSteps(lineup.steps ?? [], {
     lineupId: lineup.id,
     onSaved: onRefresh,
@@ -828,8 +843,11 @@ function MinimapDetail({
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Log to the local "recently viewed" history whenever this detail opens.
+  // Also reset any transient image state when paging to another lineup.
   useEffect(() => {
     recordView(lineup.id);
+    setLightboxIdx(null);
+    setMenuOpen(false);
   }, [lineup.id]);
 
   async function copyLink() {
@@ -865,13 +883,33 @@ function MinimapDetail({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [lightboxIdx, editor.annotating]);
 
+  // Up/Down (and j/k) page through the map's lineups while the detail is open
+  // and no lightbox/editor is capturing input.
+  useEffect(() => {
+    if (!canNav || lightboxIdx !== null || editor.annotating) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "ArrowDown" || e.key === "j") {
+        e.preventDefault();
+        goRel(1);
+      } else if (e.key === "ArrowUp" || e.key === "k") {
+        e.preventDefault();
+        goRel(-1);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canNav, lightboxIdx, editor.annotating, navIdx, siblings]);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
       onClick={onClose}
     >
+      <div className="flex max-h-full w-full max-w-3xl flex-col items-center gap-2">
+        {canNav && <NavArrow dir="prev" onClick={() => goRel(-1)} />}
       <div
-        className="relative max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-panel-border bg-panel"
+        className={`relative w-full ${canNav ? "max-h-[80vh]" : "max-h-[90vh]"} overflow-y-auto rounded-xl border border-panel-border bg-panel`}
         onClick={(e) => e.stopPropagation()}
       >
         {copied && (
@@ -966,6 +1004,7 @@ function MinimapDetail({
           )}
           {hasSteps ? (
             <StepCarousel
+              key={lineup.id}
               steps={displaySteps}
               enableKeyboard
               onImageClick={(idx) => setLightboxIdx(stepIdx[idx])}
@@ -976,6 +1015,8 @@ function MinimapDetail({
             </p>
           )}
         </div>
+      </div>
+        {canNav && <NavArrow dir="next" onClick={() => goRel(1)} />}
       </div>
 
       {lightboxIdx !== null && (
