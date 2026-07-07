@@ -621,6 +621,7 @@ export default function MinimapView({
 
       {selected && (
         <MinimapDetail
+          key={selected.id}
           lineup={selected}
           siblings={shown}
           onNavigate={setSelected}
@@ -843,11 +844,8 @@ function MinimapDetail({
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Log to the local "recently viewed" history whenever this detail opens.
-  // Also reset any transient image state when paging to another lineup.
   useEffect(() => {
     recordView(lineup.id);
-    setLightboxIdx(null);
-    setMenuOpen(false);
   }, [lineup.id]);
 
   async function copyLink() {
@@ -1004,7 +1002,6 @@ function MinimapDetail({
           )}
           {hasSteps ? (
             <StepCarousel
-              key={lineup.id}
               steps={displaySteps}
               enableKeyboard
               onImageClick={(idx) => setLightboxIdx(stepIdx[idx])}
